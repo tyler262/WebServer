@@ -1,0 +1,61 @@
+{
+  "weather": {
+    "city": "Your City",
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "units": "fahrenheit"
+  },
+  "tvs": [
+    {
+      "name": "Living Room TV",
+      "ip": "192.168.1.100"
+    },
+    {
+      "name": "Bedroom TV",
+      "ip": "192.168.1.101"
+    }
+  ],
+  "devices": [
+    {
+      "name": "Router",
+      "ip": "192.168.1.1"
+    },
+    {
+      "name": "My Phone",
+      "ip": "192.168.1.50"
+    },
+    {
+      "name": "Partner's Phone",
+      "ip": "192.168.1.51"
+    },
+    {
+      "name": "Living Room TV",
+      "ip": "192.168.1.100"
+    },
+    {
+      "name": "Bedroom TV",
+      "ip": "192.168.1.101"
+    }
+  ],
+  "pihole": {
+    "host": "localhost",
+    "api_key": ""
+  },
+  "news": {
+    "feeds": [
+      {
+        "name": "AP News",
+        "url": "https://feeds.apnews.com/rss/apf-topnews"
+      },
+      {
+        "name": "NPR",
+        "url": "https://feeds.npr.org/1001/rss.xml"
+      },
+      {
+        "name": "BBC News",
+        "url": "http://feeds.bbci.co.uk/news/rss.xml"
+      }
+    ],
+    "articles_per_feed": 5
+  }
+}
