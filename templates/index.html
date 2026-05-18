@@ -72,6 +72,33 @@
       <div id="photo-content" class="loading">Loading&hellip;</div>
     </div>
 
+    <!-- Todo List -->
+    <div class="card" id="todo-card">
+      <div class="card-title">&#9989; To-Do List</div>
+      <form id="todo-form" onsubmit="addTodo(event)">
+        <div class="input-row">
+          <input id="todo-input" type="text" placeholder="Add a task&hellip;" maxlength="500" autocomplete="off">
+          <button type="submit" class="btn-submit">Add</button>
+        </div>
+      </form>
+      <div id="todo-list"></div>
+    </div>
+
+    <!-- Suggestions -->
+    <div class="card" id="notes-card">
+      <div class="card-title">&#128172; Suggestions</div>
+      <form id="note-form" onsubmit="addNote(event)">
+        <div class="input-stack">
+          <input id="note-name" type="text" placeholder="Your name (optional)" maxlength="60" autocomplete="off">
+          <div class="input-row">
+            <input id="note-text" type="text" placeholder="Leave a suggestion&hellip;" maxlength="1000" autocomplete="off">
+            <button type="submit" class="btn-submit">Post</button>
+          </div>
+        </div>
+      </form>
+      <div id="notes-list"></div>
+    </div>
+
     <!-- Network Devices -->
     <div class="card devices-card" id="devices-card">
       <div class="card-title">&#128225; Network Devices</div>

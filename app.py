@@ -2,6 +2,7 @@ from flask import Flask, jsonify, render_template, request
 import json
 import os
 import socket
+import sqlite3
 import subprocess
 import time
 
@@ -11,6 +12,38 @@ import requests
 
 app = Flask(__name__)
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
+DB_FILE = os.path.join(os.path.dirname(__file__), "dashboard.db")
+
+
+def get_db():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS todos (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            text       TEXT    NOT NULL,
+            done       INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL DEFAULT '',
+            text       TEXT    NOT NULL,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+init_db()
 
 WMO_DESCRIPTIONS = {
     0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -343,6 +376,89 @@ def photo():
         }
         set_cache("photo", result)
         return jsonify(result)
+
+
+@app.route("/api/todos", methods=["GET"])
+def get_todos():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM todos ORDER BY done ASC, id DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/todos", methods=["POST"])
+def add_todo():
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Text required"}), 400
+    if len(text) > 500:
+        return jsonify({"error": "Max 500 characters"}), 400
+    conn = get_db()
+    cur = conn.execute("INSERT INTO todos (text) VALUES (?)", (text,))
+    conn.commit()
+    row = conn.execute("SELECT * FROM todos WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/todos/<int:todo_id>", methods=["PATCH"])
+def update_todo(todo_id):
+    data = request.get_json(silent=True) or {}
+    done = 1 if data.get("done") else 0
+    conn = get_db()
+    conn.execute("UPDATE todos SET done = ? WHERE id = ?", (done, todo_id))
+    conn.commit()
+    row = conn.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(dict(row))
+
+
+@app.route("/api/todos/<int:todo_id>", methods=["DELETE"])
+def delete_todo(todo_id):
+    conn = get_db()
+    conn.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+
+@app.route("/api/notes", methods=["GET"])
+def get_notes():
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM notes ORDER BY id DESC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/notes", methods=["POST"])
+def add_note():
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    name = (data.get("name") or "").strip()[:60]
+    if not text:
+        return jsonify({"error": "Text required"}), 400
+    if len(text) > 1000:
+        return jsonify({"error": "Max 1000 characters"}), 400
+    conn = get_db()
+    cur = conn.execute("INSERT INTO notes (name, text) VALUES (?, ?)", (name, text))
+    conn.commit()
+    row = conn.execute("SELECT * FROM notes WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/notes/<int:note_id>", methods=["DELETE"])
+def delete_note(note_id):
+    conn = get_db()
+    conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
 
 
 if __name__ == "__main__":

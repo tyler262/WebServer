@@ -209,6 +209,114 @@ async function fetchPhoto() {
   }
 }
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function fmtDate(str) {
+  try {
+    const d = new Date(str.replace(" ", "T"));
+    return d.toLocaleDateString([], { month: "short", day: "numeric" })
+      + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch { return str; }
+}
+
+// ── Todo list ─────────────────────────────────────────────────────────────────
+async function fetchTodos() {
+  const el = document.getElementById("todo-list");
+  try {
+    const todos = await (await fetch("/api/todos")).json();
+    if (!todos.length) {
+      el.innerHTML = '<p class="muted" style="font-size:0.85rem;padding:0.5rem 0">No tasks yet</p>';
+      return;
+    }
+    el.innerHTML = `<div class="todo-scroll">${todos.map(t => `
+      <div class="todo-item${t.done ? " done" : ""}" id="todo-${t.id}">
+        <label class="todo-check">
+          <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleTodo(${t.id}, this.checked)">
+          <span class="todo-text">${escapeHtml(t.text)}</span>
+        </label>
+        <button class="btn-del" onclick="deleteTodo(${t.id})" title="Delete">&times;</button>
+      </div>`).join("")}</div>`;
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load tasks</p>';
+  }
+}
+
+async function addTodo(e) {
+  e.preventDefault();
+  const input = document.getElementById("todo-input");
+  const text = input.value.trim();
+  if (!text) return;
+  const res = await fetch("/api/todos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  }).catch(() => null);
+  if (res && res.ok) { input.value = ""; fetchTodos(); }
+}
+
+async function toggleTodo(id, done) {
+  await fetch(`/api/todos/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ done }),
+  }).catch(() => null);
+  fetchTodos();
+}
+
+async function deleteTodo(id) {
+  await fetch(`/api/todos/${id}`, { method: "DELETE" }).catch(() => null);
+  fetchTodos();
+}
+
+// ── Suggestions ───────────────────────────────────────────────────────────────
+async function fetchNotes() {
+  const el = document.getElementById("notes-list");
+  try {
+    const notes = await (await fetch("/api/notes")).json();
+    if (!notes.length) {
+      el.innerHTML = '<p class="muted" style="font-size:0.85rem;padding:0.5rem 0">No suggestions yet</p>';
+      return;
+    }
+    el.innerHTML = `<div class="notes-scroll">${notes.map(n => `
+      <div class="note-item" id="note-${n.id}">
+        <div class="note-header">
+          <span class="note-name">${escapeHtml(n.name || "Anonymous")}</span>
+          <span class="note-time">${n.created_at ? fmtDate(n.created_at) : ""}</span>
+        </div>
+        <div class="note-body">${escapeHtml(n.text)}</div>
+        <button class="btn-del" onclick="deleteNote(${n.id})" title="Delete">&times;</button>
+      </div>`).join("")}</div>`;
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load suggestions</p>';
+  }
+}
+
+async function addNote(e) {
+  e.preventDefault();
+  const nameEl = document.getElementById("note-name");
+  const textEl = document.getElementById("note-text");
+  const text = textEl.value.trim();
+  if (!text) return;
+  const res = await fetch("/api/notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: nameEl.value.trim(), text }),
+  }).catch(() => null);
+  if (res && res.ok) { textEl.value = ""; nameEl.value = ""; fetchNotes(); }
+}
+
+async function deleteNote(id) {
+  await fetch(`/api/notes/${id}`, { method: "DELETE" }).catch(() => null);
+  fetchNotes();
+}
+
 // ── TV Control ────────────────────────────────────────────────────────────────
 async function turnOffTV(index, btn) {
   const name = btn.dataset.tv || `TV ${index + 1}`;
@@ -238,6 +346,8 @@ function loadAll() {
   fetchQuote();
   fetchJoke();
   fetchPhoto();
+  fetchTodos();
+  fetchNotes();
 }
 
 updateClock();
@@ -245,6 +355,8 @@ loadAll();
 
 setInterval(updateClock,   1_000);
 setInterval(fetchSystem,  10_000);
+setInterval(fetchTodos,   15_000);
+setInterval(fetchNotes,   15_000);
 setInterval(fetchDevices, 30_000);
 setInterval(fetchPihole,  60_000);
 setInterval(fetchWeather, 10 * 60_000);
