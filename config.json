@@ -41,6 +41,10 @@
     "host": "localhost",
     "api_key": ""
   },
+  "photo": {
+    "source": "picsum",
+    "nasa_api_key": ""
+  },
   "news": {
     "feeds": [
       {

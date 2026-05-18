@@ -153,6 +153,62 @@ async function fetchSystem() {
   }
 }
 
+// ── Quote ─────────────────────────────────────────────────────────────────────
+async function fetchQuote(forceRefresh = false) {
+  const el = document.getElementById("quote-content");
+  try {
+    const url = forceRefresh ? "/api/quote?refresh=1" : "/api/quote";
+    const d = await (await fetch(url)).json();
+    if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
+    el.innerHTML = `
+      <div class="quote-text">${d.text}</div>
+      <div class="quote-author">&mdash; ${d.author}</div>`;
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load quote</p>';
+  }
+}
+
+// ── Joke ──────────────────────────────────────────────────────────────────────
+async function fetchJoke(forceRefresh = false) {
+  const el = document.getElementById("joke-content");
+  try {
+    const url = forceRefresh ? "/api/joke?refresh=1" : "/api/joke";
+    const d = await (await fetch(url)).json();
+    if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
+    if (d.type === "single") {
+      el.innerHTML = `<div class="joke-setup">${d.joke}</div>`;
+    } else {
+      el.innerHTML = `
+        <div class="joke-setup">${d.setup}</div>
+        <button class="btn-reveal" onclick="revealPunchline(this)">Reveal punchline &hellip;</button>
+        <div class="joke-delivery" style="display:none">${d.delivery}</div>`;
+    }
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load joke</p>';
+  }
+}
+
+function revealPunchline(btn) {
+  btn.nextElementSibling.style.display = "block";
+  btn.style.display = "none";
+}
+
+// ── Photo ─────────────────────────────────────────────────────────────────────
+async function fetchPhoto() {
+  const el = document.getElementById("photo-content");
+  try {
+    const d = await (await fetch("/api/photo")).json();
+    if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
+    const titleHtml   = d.title   ? `<div class="photo-title">${d.title}</div>` : "";
+    const captionHtml = d.caption ? `<div class="photo-caption">${d.caption}</div>` : "";
+    el.innerHTML = `
+      <img class="photo-img" src="${d.url}" alt="${d.title || "Photo of the day"}" loading="lazy">
+      ${titleHtml}${captionHtml}`;
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load photo</p>';
+  }
+}
+
 // ── TV Control ────────────────────────────────────────────────────────────────
 async function turnOffTV(index, btn) {
   const name = btn.dataset.tv || `TV ${index + 1}`;
@@ -179,6 +235,9 @@ function loadAll() {
   fetchDevices();
   fetchPihole();
   fetchSystem();
+  fetchQuote();
+  fetchJoke();
+  fetchPhoto();
 }
 
 updateClock();

@@ -1,8 +1,9 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 import json
 import os
 import socket
 import subprocess
+import time
 
 import feedparser
 import psutil
@@ -50,6 +51,20 @@ def wmo_icon(code):
 def load_config():
     with open(CONFIG_FILE) as f:
         return json.load(f)
+
+
+_cache: dict = {}
+
+
+def get_cache(key: str, ttl: int = 3600):
+    entry = _cache.get(key)
+    if entry and (time.time() - entry["ts"]) < ttl:
+        return entry["data"]
+    return None
+
+
+def set_cache(key: str, data):
+    _cache[key] = {"ts": time.time(), "data": data}
 
 
 def ping(host):
@@ -245,6 +260,89 @@ def tv_off(tv_index):
         )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/quote")
+def quote():
+    force = request.args.get("refresh") == "1"
+    cached = None if force else get_cache("quote", 3600)
+    if cached:
+        return jsonify(cached)
+    try:
+        r = requests.get("https://zenquotes.io/api/random", timeout=10)
+        r.raise_for_status()
+        d = r.json()[0]
+        result = {"text": d["q"], "author": d["a"]}
+        set_cache("quote", result)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/joke")
+def joke():
+    force = request.args.get("refresh") == "1"
+    cached = None if force else get_cache("joke", 3600)
+    if cached:
+        return jsonify(cached)
+    try:
+        r = requests.get("https://v2.jokeapi.dev/joke/Any?safe-mode", timeout=10)
+        r.raise_for_status()
+        d = r.json()
+        if d.get("error"):
+            return jsonify({"error": d.get("message", "JokeAPI error")}), 500
+        if d["type"] == "single":
+            result = {"type": "single", "joke": d["joke"]}
+        else:
+            result = {"type": "twopart", "setup": d["setup"], "delivery": d["delivery"]}
+        set_cache("joke", result)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/photo")
+def photo():
+    cached = get_cache("photo", 6 * 3600)
+    if cached:
+        return jsonify(cached)
+    config = load_config()
+    photo_cfg = config.get("photo", {})
+    source = photo_cfg.get("source", "picsum")
+
+    if source == "nasa_apod":
+        api_key = photo_cfg.get("nasa_api_key") or "DEMO_KEY"
+        try:
+            r = requests.get(
+                "https://api.nasa.gov/planetary/apod",
+                params={"api_key": api_key},
+                timeout=10,
+            )
+            r.raise_for_status()
+            d = r.json()
+            if d.get("media_type") != "image":
+                raise ValueError("Today's APOD is not an image")
+            explanation = d.get("explanation", "")
+            result = {
+                "url": d.get("hdurl") or d.get("url"),
+                "title": d.get("title", ""),
+                "caption": explanation[:220] + "…" if len(explanation) > 220 else explanation,
+                "source": "NASA Astronomy Picture of the Day",
+            }
+            set_cache("photo", result)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        seed = time.strftime("%Y%m%d")
+        result = {
+            "url": f"https://picsum.photos/seed/{seed}/1000/520",
+            "title": "",
+            "caption": "",
+            "source": "picsum.photos",
+        }
+        set_cache("photo", result)
+        return jsonify(result)
 
 
 if __name__ == "__main__":

@@ -52,6 +52,8 @@ header {
   grid-template-areas:
     "weather  tv"
     "pihole   system"
+    "quote    joke"
+    "photo    photo"
     "devices  devices"
     "news     news";
   gap: 1rem;
@@ -68,6 +70,9 @@ header {
       "tv"
       "pihole"
       "system"
+      "quote"
+      "joke"
+      "photo"
       "devices"
       "news";
   }
@@ -77,6 +82,9 @@ header {
 #tv-card       { grid-area: tv; }
 #pihole-card   { grid-area: pihole; }
 #system-card   { grid-area: system; }
+#quote-card    { grid-area: quote; }
+#joke-card     { grid-area: joke; }
+.photo-card    { grid-area: photo; }
 .devices-card  { grid-area: devices; }
 .news-card     { grid-area: news; }
 
@@ -319,4 +327,97 @@ header {
 @media (min-width: 700px) {
   .news-scroll { columns: 2; column-gap: 1.5rem; max-height: none; }
   .news-item   { break-inside: avoid; }
+}
+
+/* ── Card title row (title + action button) ─ */
+.card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.card-title-row .card-title { margin-bottom: 0; }
+
+.btn-new {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--card-border);
+  padding: 0.2rem 0.6rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.btn-new:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── Quote ───────────────────────────────── */
+.quote-text {
+  font-size: 1rem;
+  line-height: 1.65;
+  font-style: italic;
+  color: var(--text);
+  margin-bottom: 0.85rem;
+  padding-left: 1rem;
+  border-left: 3px solid var(--accent);
+}
+
+.quote-author {
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ── Joke ────────────────────────────────── */
+.joke-setup {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin-bottom: 0.85rem;
+}
+
+.joke-delivery {
+  font-size: 0.95rem;
+  color: var(--accent);
+  border-top: 1px solid var(--card-border);
+  padding-top: 0.75rem;
+  line-height: 1.55;
+}
+
+.btn-reveal {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px dashed var(--card-border);
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.btn-reveal:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── Photo ───────────────────────────────── */
+.photo-img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+  max-height: 420px;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.photo-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-top: 0.65rem;
+}
+
+.photo-caption {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+  line-height: 1.5;
 }
