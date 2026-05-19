@@ -1,13 +1,34 @@
-// Clock
+// ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock() {
   const now = new Date();
   document.getElementById("clock").textContent = now.toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    weekday: "short", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
   });
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function fmtDate(str) {
+  try {
+    const d = new Date(str.replace(" ", "T"));
+    return d.toLocaleDateString([], { month: "short", day: "numeric" })
+      + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch { return str; }
+}
+
+function timeAgo(str) {
+  try {
+    const diff = (Date.now() - new Date(str)) / 60000;
+    if (diff < 60)   return Math.round(diff) + "m ago";
+    if (diff < 1440) return Math.round(diff / 60) + "h ago";
+    return new Date(str).toLocaleDateString();
+  } catch { return ""; }
 }
 
 // ── Weather ───────────────────────────────────────────────────────────────────
@@ -36,15 +57,6 @@ async function fetchWeather() {
 }
 
 // ── News ──────────────────────────────────────────────────────────────────────
-function timeAgo(str) {
-  try {
-    const diff = (Date.now() - new Date(str)) / 60000;
-    if (diff < 60)    return Math.round(diff) + "m ago";
-    if (diff < 1440)  return Math.round(diff / 60) + "h ago";
-    return new Date(str).toLocaleDateString();
-  } catch { return ""; }
-}
-
 async function fetchNews() {
   const el = document.getElementById("news-content");
   try {
@@ -157,8 +169,7 @@ async function fetchSystem() {
 async function fetchQuote(forceRefresh = false) {
   const el = document.getElementById("quote-content");
   try {
-    const url = forceRefresh ? "/api/quote?refresh=1" : "/api/quote";
-    const d = await (await fetch(url)).json();
+    const d = await (await fetch(forceRefresh ? "/api/quote?refresh=1" : "/api/quote")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
     el.innerHTML = `
       <div class="quote-text">${d.text}</div>
@@ -172,8 +183,7 @@ async function fetchQuote(forceRefresh = false) {
 async function fetchJoke(forceRefresh = false) {
   const el = document.getElementById("joke-content");
   try {
-    const url = forceRefresh ? "/api/joke?refresh=1" : "/api/joke";
-    const d = await (await fetch(url)).json();
+    const d = await (await fetch(forceRefresh ? "/api/joke?refresh=1" : "/api/joke")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
     if (d.type === "single") {
       el.innerHTML = `<div class="joke-setup">${d.joke}</div>`;
@@ -194,39 +204,27 @@ function revealPunchline(btn) {
 }
 
 // ── Photo ─────────────────────────────────────────────────────────────────────
-async function fetchPhoto() {
+async function fetchPhoto(forceRefresh = false) {
   const el = document.getElementById("photo-content");
   try {
-    const d = await (await fetch("/api/photo")).json();
+    const d = await (await fetch(forceRefresh ? "/api/photo?refresh=1" : "/api/photo")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
-    const titleHtml   = d.title   ? `<div class="photo-title">${d.title}</div>` : "";
-    const captionHtml = d.caption ? `<div class="photo-caption">${d.caption}</div>` : "";
     el.innerHTML = `
       <img class="photo-img" src="${d.url}" alt="${d.title || "Photo of the day"}" loading="lazy">
-      ${titleHtml}${captionHtml}`;
+      ${d.title   ? `<div class="photo-title">${d.title}</div>`     : ""}
+      ${d.caption ? `<div class="photo-caption">${d.caption}</div>` : ""}`;
   } catch {
     el.innerHTML = '<p class="error">Failed to load photo</p>';
   }
 }
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+// ── Todo list (3-state: 0=pending, 1=in progress, 2=done) ────────────────────
+const TODO_STATUS = [
+  { cls: "pending",     icon: "",  next: 1 },
+  { cls: "in-progress", icon: "▶", next: 2 },
+  { cls: "done",        icon: "✓", next: 0 },
+];
 
-function fmtDate(str) {
-  try {
-    const d = new Date(str.replace(" ", "T"));
-    return d.toLocaleDateString([], { month: "short", day: "numeric" })
-      + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch { return str; }
-}
-
-// ── Todo list ─────────────────────────────────────────────────────────────────
 async function fetchTodos() {
   const el = document.getElementById("todo-list");
   try {
@@ -235,14 +233,16 @@ async function fetchTodos() {
       el.innerHTML = '<p class="muted" style="font-size:0.85rem;padding:0.5rem 0">No tasks yet</p>';
       return;
     }
-    el.innerHTML = `<div class="todo-scroll">${todos.map(t => `
-      <div class="todo-item${t.done ? " done" : ""}" id="todo-${t.id}">
-        <label class="todo-check">
-          <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleTodo(${t.id}, this.checked)">
+    el.innerHTML = `<div class="todo-scroll">${todos.map(t => {
+      const s = TODO_STATUS[t.status] || TODO_STATUS[0];
+      return `
+        <div class="todo-item ${s.cls}" id="todo-${t.id}">
+          <button class="status-btn ${s.cls}" title="Click to advance status"
+            onclick="setTodoStatus(${t.id}, ${s.next})">${s.icon}</button>
           <span class="todo-text">${escapeHtml(t.text)}</span>
-        </label>
-        <button class="btn-del" onclick="deleteTodo(${t.id})" title="Delete">&times;</button>
-      </div>`).join("")}</div>`;
+          <button class="btn-del" onclick="deleteTodo(${t.id})" title="Delete">&times;</button>
+        </div>`;
+    }).join("")}</div>`;
   } catch {
     el.innerHTML = '<p class="error">Failed to load tasks</p>';
   }
@@ -261,11 +261,11 @@ async function addTodo(e) {
   if (res && res.ok) { input.value = ""; fetchTodos(); }
 }
 
-async function toggleTodo(id, done) {
+async function setTodoStatus(id, status) {
   await fetch(`/api/todos/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ done }),
+    body: JSON.stringify({ status }),
   }).catch(() => null);
   fetchTodos();
 }
@@ -273,6 +273,55 @@ async function toggleTodo(id, done) {
 async function deleteTodo(id) {
   await fetch(`/api/todos/${id}`, { method: "DELETE" }).catch(() => null);
   fetchTodos();
+}
+
+// ── Grocery list ──────────────────────────────────────────────────────────────
+async function fetchGroceries() {
+  const el = document.getElementById("grocery-list");
+  try {
+    const items = await (await fetch("/api/groceries")).json();
+    if (!items.length) {
+      el.innerHTML = '<p class="muted" style="font-size:0.85rem;padding:0.5rem 0">List is empty</p>';
+      return;
+    }
+    el.innerHTML = `<div class="todo-scroll">${items.map(g => `
+      <div class="todo-item${g.done ? " done" : ""}" id="grocery-${g.id}">
+        <button class="status-btn ${g.done ? "done" : ""}"
+          title="${g.done ? "Mark needed" : "Mark got it"}"
+          onclick="toggleGrocery(${g.id}, ${g.done ? 0 : 1})">${g.done ? "✓" : ""}</button>
+        <span class="todo-text">${escapeHtml(g.text)}</span>
+        <button class="btn-del" onclick="deleteGrocery(${g.id})" title="Remove">&times;</button>
+      </div>`).join("")}</div>`;
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load grocery list</p>';
+  }
+}
+
+async function addGrocery(e) {
+  e.preventDefault();
+  const input = document.getElementById("grocery-input");
+  const text = input.value.trim();
+  if (!text) return;
+  const res = await fetch("/api/groceries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  }).catch(() => null);
+  if (res && res.ok) { input.value = ""; fetchGroceries(); }
+}
+
+async function toggleGrocery(id, done) {
+  await fetch(`/api/groceries/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ done }),
+  }).catch(() => null);
+  fetchGroceries();
+}
+
+async function deleteGrocery(id) {
+  await fetch(`/api/groceries/${id}`, { method: "DELETE" }).catch(() => null);
+  fetchGroceries();
 }
 
 // ── Suggestions ───────────────────────────────────────────────────────────────
@@ -347,17 +396,19 @@ function loadAll() {
   fetchJoke();
   fetchPhoto();
   fetchTodos();
+  fetchGroceries();
   fetchNotes();
 }
 
 updateClock();
 loadAll();
 
-setInterval(updateClock,   1_000);
-setInterval(fetchSystem,  10_000);
-setInterval(fetchTodos,   15_000);
-setInterval(fetchNotes,   15_000);
-setInterval(fetchDevices, 30_000);
-setInterval(fetchPihole,  60_000);
-setInterval(fetchWeather, 10 * 60_000);
-setInterval(fetchNews,    30 * 60_000);
+setInterval(updateClock,    1_000);
+setInterval(fetchSystem,   10_000);
+setInterval(fetchTodos,    15_000);
+setInterval(fetchGroceries,15_000);
+setInterval(fetchNotes,    15_000);
+setInterval(fetchDevices,  30_000);
+setInterval(fetchPihole,   60_000);
+setInterval(fetchWeather,  10 * 60_000);
+setInterval(fetchNews,     30 * 60_000);

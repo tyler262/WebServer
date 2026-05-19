@@ -54,7 +54,8 @@ header {
     "pihole   system"
     "quote    joke"
     "photo    photo"
-    "todo     notes"
+    "todo     grocery"
+    "notes    notes"
     "devices  devices"
     "news     news";
   gap: 1rem;
@@ -75,6 +76,7 @@ header {
       "joke"
       "photo"
       "todo"
+      "grocery"
       "notes"
       "devices"
       "news";
@@ -89,7 +91,8 @@ header {
 #joke-card     { grid-area: joke; }
 .photo-card    { grid-area: photo; }
 #todo-card     { grid-area: todo; }
-#notes-card    { grid-area: notes; }
+#grocery-card  { grid-area: grocery; }
+.notes-card    { grid-area: notes; }
 .devices-card  { grid-area: devices; }
 .news-card     { grid-area: news; }
 
@@ -503,36 +506,55 @@ input[type="text"]:focus         { border-color: var(--accent); }
 .todo-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.4rem;
+  gap: 0.5rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--card-border);
 }
 
 .todo-item:last-child { border-bottom: none; }
 
-.todo-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  flex: 1;
+/* Three-state cycle button */
+.status-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+  background: transparent;
   cursor: pointer;
-  min-width: 0;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  padding: 0;
+  line-height: 1;
+  color: transparent;
 }
 
-.todo-check input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  margin-top: 0.15rem;
-  flex-shrink: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
+.status-btn.in-progress {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.status-btn.done {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(74, 222, 128, 0.12);
 }
 
 .todo-text {
   font-size: 0.9rem;
   line-height: 1.45;
   word-break: break-word;
+  flex: 1;
+  min-width: 0;
 }
+
+.todo-item.in-progress .todo-text { color: var(--warning); }
 
 .todo-item.done .todo-text {
   text-decoration: line-through;
@@ -541,10 +563,15 @@ input[type="text"]:focus         { border-color: var(--accent); }
 
 /* ── Suggestions ─────────────────────────── */
 .notes-scroll {
-  max-height: 320px;
+  max-height: 260px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--card-border) transparent;
+}
+
+@media (min-width: 641px) {
+  .notes-scroll { columns: 2; column-gap: 1.5rem; max-height: none; }
+  .note-item    { break-inside: avoid; }
 }
 
 .note-item {

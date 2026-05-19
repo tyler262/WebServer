@@ -68,7 +68,10 @@
 
     <!-- Photo -->
     <div class="card photo-card" id="photo-card">
-      <div class="card-title">&#128247; Photo of the Day</div>
+      <div class="card-title-row">
+        <span class="card-title">&#128247; Photo of the Day</span>
+        <button class="btn-new" onclick="fetchPhoto(true)">Next</button>
+      </div>
       <div id="photo-content" class="loading">Loading&hellip;</div>
     </div>
 
@@ -84,8 +87,20 @@
       <div id="todo-list"></div>
     </div>
 
+    <!-- Grocery List -->
+    <div class="card" id="grocery-card">
+      <div class="card-title">&#128722; Grocery List</div>
+      <form id="grocery-form" onsubmit="addGrocery(event)">
+        <div class="input-row">
+          <input id="grocery-input" type="text" placeholder="Add item&hellip;" maxlength="300" autocomplete="off">
+          <button type="submit" class="btn-submit">Add</button>
+        </div>
+      </form>
+      <div id="grocery-list"></div>
+    </div>
+
     <!-- Suggestions -->
-    <div class="card" id="notes-card">
+    <div class="card notes-card" id="notes-card">
       <div class="card-title">&#128172; Suggestions</div>
       <form id="note-form" onsubmit="addNote(event)">
         <div class="input-stack">

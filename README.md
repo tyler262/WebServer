@@ -19,8 +19,10 @@ The dashboard is a single dark-mode page with cards arranged in a grid:
 ├─────────────────┴─────────────────┤
 │        📷 Photo of the Day        │
 ├─────────────────┬─────────────────┤
-│  ✅ To-Do List  │  💬 Suggestions │
+│  ✅ To-Do List  │  🛒 Grocery     │
 ├─────────────────┴─────────────────┤
+│           💬 Suggestions          │
+├───────────────────────────────────┤
 │           📡 Network Devices      │
 ├───────────────────────────────────┤
 │             📰 News               │
@@ -60,17 +62,16 @@ See the **TV Setup** section below for the one-time pairing steps.
 ---
 
 ### 🛡 Pi-hole
-Pulls live stats from Pi-hole's local API. Shows:
+Pulls live stats from Pi-hole's local API. Shows queries, block rate,
+blocklist size, and whether blocking is enabled.
 
-- **Queries today** — total DNS lookups made by all devices
-- **Blocked today** — how many were blocked as ads/trackers
-- **Block rate** — percentage blocked
-- **Blocklist size** — total number of domains being blocked
-- **Status** — whether Pi-hole is enabled or paused (shown with a green/red dot)
+**Pi-hole v6 (current):** Uses the new REST API with password authentication.
+Set `pihole.password` in `config.json` to your Pi-hole web password.
 
-If Pi-hole is on the same Pi, `host` should stay `localhost`. If it's on a
-different machine, set the IP address. The `api_key` is optional but needed if
-you've locked down the Pi-hole API (Pi-hole admin → Settings → API/Privacy).
+**Pi-hole v5 (older):** Uses `api_key`. Leave `password` blank and set
+`api_key` from Pi-hole admin → Settings → API/Privacy → Show API token.
+
+The dashboard auto-detects which to use based on which field is set.
 
 ---
 
@@ -104,7 +105,9 @@ button fetches a fresh one.
 ---
 
 ### 📷 Photo of the Day
-A full-width photo that changes daily. Two options:
+A full-width photo that changes daily. **"Next" button** picks a random new
+photo immediately. Two sources:
+
 
 **Picsum Photos (default)** — no setup needed. Pulls a beautiful landscape/nature
 photo seeded by the current date, so it changes every day automatically.
@@ -119,21 +122,35 @@ To switch to NASA APOD, see the **Optional: NASA Photo** section below.
 ---
 
 ### ✅ To-Do List
-A shared household task list. Anyone on the network can add, check off, or
-delete tasks through the dashboard. Data is stored in a local SQLite database
-(`dashboard.db`) so it persists when the Pi restarts. Refreshes every 15
-seconds, so changes made on one phone show up on other devices shortly after.
+Shared household task list with **three states** — click the circle button to
+cycle through them:
 
-Completed tasks move to the bottom with a strikethrough. Incomplete tasks stay
-at the top.
+| State | Indicator | What it means |
+|-------|-----------|---------------|
+| Pending | ○ gray circle | Not started yet |
+| In Progress | ▶ yellow | Someone is working on it |
+| Done | ✓ green | Finished — moves to bottom with strikethrough |
+
+If you have ntfy configured (see Notifications below), advancing a task sends
+a push notification to your phones.
+
+Stored in `dashboard.db`, refreshes every 15 seconds.
+
+---
+
+### 🛒 Grocery List
+Shared grocery list. Add items, check them off when you grab them in the store,
+delete them when done. Checked items drop to the bottom. If ntfy is set up,
+adding an item sends a notification. Stored in `dashboard.db`, refreshes every
+15 seconds.
 
 ---
 
 ### 💬 Suggestions
 A household message/suggestion box. Leave a note with your name (optional) and
-a message. Useful for things like "we're out of milk" or "can someone let the
-dog out." Newest entries appear at the top. Also stored in `dashboard.db`.
-Refreshes every 15 seconds.
+a message. If ntfy is configured, posting a suggestion sends a notification.
+Newest entries appear at the top. Stored in `dashboard.db`, refreshes every
+15 seconds.
 
 ---
 
@@ -249,13 +266,43 @@ smart home hubs, NAS drives, game consoles.
 ```json
 "pihole": {
   "host": "localhost",
+  "password": "",
   "api_key": ""
 }
 ```
 | Field | Description |
 |-------|-------------|
 | `host` | `"localhost"` if Pi-hole is on this Pi. Otherwise the Pi-hole's IP. |
-| `api_key` | Optional. Find it in Pi-hole admin → Settings → API/Privacy → Show API token. Leave blank if you haven't restricted the API. |
+| `password` | **Pi-hole v6:** Your Pi-hole web password. Set this and leave `api_key` blank. |
+| `api_key` | **Pi-hole v5 (older):** Your API token from Pi-hole admin → Settings → API/Privacy → Show API token. Leave blank for v6. |
+
+The dashboard auto-detects v6 vs v5 based on which field you fill in. If you're on Pi-hole v6 (current), set `password` and leave `api_key` empty.
+
+---
+
+### Notifications (ntfy)
+```json
+"ntfy": {
+  "topic": "",
+  "server": "https://ntfy.sh"
+}
+```
+| Field | Description |
+|-------|-------------|
+| `topic` | Your unique channel name — pick something random so others don't stumble onto it, e.g. `smithfamily-dashboard-abc123`. Leave blank to disable notifications. |
+| `server` | The ntfy server. Leave as `https://ntfy.sh` to use the free public server. |
+
+**To set up push notifications:**
+
+1. Install the **ntfy** app on your Android phones ([play.google.com](https://play.google.com/store/apps/details?id=io.heckel.ntfy) or F-Droid)
+2. Open the app and subscribe to your topic name (e.g. `smithfamily-dashboard-abc123`)
+3. Add that same topic name to `config.json` under `ntfy.topic`
+4. Restart the service: `sudo systemctl restart pi-dashboard`
+
+Notifications fire automatically when:
+- A to-do item is marked **In Progress** or **Done**
+- A new **grocery item** is added
+- A new **suggestion** is posted
 
 ---
 
@@ -461,9 +508,10 @@ personal data — todos and suggestions. It lives only on the Pi.
 - If the TV IP changed, update `config.json` and restart the service
 
 **Pi-hole card shows an error**
-- If you recently updated Pi-hole to v6, the API format changed
-- Try leaving `api_key` blank first — v6 may require a different key format
+- **Pi-hole v6:** Set `pihole.password` in `config.json` to your Pi-hole web password, and leave `api_key` blank
+- **Pi-hole v5:** Set `pihole.api_key` to the token from Pi-hole admin → Settings → API/Privacy, and leave `password` blank
 - Check the Pi-hole admin panel is reachable at `http://localhost/admin`
+- Test the v6 API manually: `curl http://localhost/api/stats/summary`
 
 **Todo list or suggestions disappeared**
 - They're in `dashboard.db` in the project folder

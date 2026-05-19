@@ -39,7 +39,12 @@
   ],
   "pihole": {
     "host": "localhost",
+    "password": "",
     "api_key": ""
+  },
+  "ntfy": {
+    "topic": "",
+    "server": "https://ntfy.sh"
   },
   "photo": {
     "source": "picsum",
