@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-title">&#127968; Home Dashboard</div>
+    <div id="clock" class="header-clock"></div>
+  </header>
+
+  <main class="grid">
+
+    <!-- Weather -->
+    <div class="card" id="weather-card">
+      <div class="card-title">&#127780; Weather</div>
+      <div id="weather-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- TV Controls -->
+    <div class="card" id="tv-card">
+      <div class="card-title">&#128250; TV Controls</div>
+      {% for tv in tvs %}
+      <div class="tv-item">
+        <span class="tv-name">{{ tv.name }}</span>
+        <button class="btn-off" onclick="turnOffTV({{ loop.index0 }}, this)" data-tv="{{ tv.name }}">
+          &#9211; Turn Off
+        </button>
+      </div>
+      {% else %}
+      <p class="muted">No TVs configured in config.json</p>
+      {% endfor %}
+      <div id="tv-status" class="tv-status-msg"></div>
+    </div>
+
+    <!-- Pi-hole -->
+    <div class="card" id="pihole-card">
+      <div class="card-title">&#128737; Pi-hole</div>
+      <div id="pihole-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- System -->
+    <div class="card" id="system-card">
+      <div class="card-title">&#128187; System</div>
+      <div id="system-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- Quote -->
+    <div class="card" id="quote-card">
+      <div class="card-title-row">
+        <span class="card-title">&#10024; Quote of the Day</span>
+        <button class="btn-new" onclick="fetchQuote(true)">New</button>
+      </div>
+      <div id="quote-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- Joke -->
+    <div class="card" id="joke-card">
+      <div class="card-title-row">
+        <span class="card-title">&#128514; Daily Joke</span>
+        <button class="btn-new" onclick="fetchJoke(true)">New</button>
+      </div>
+      <div id="joke-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- Photo -->
+    <div class="card photo-card" id="photo-card">
+      <div class="card-title">&#128247; Photo of the Day</div>
+      <div id="photo-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- Todo List -->
+    <div class="card" id="todo-card">
+      <div class="card-title">&#9989; To-Do List</div>
+      <form id="todo-form" onsubmit="addTodo(event)">
+        <div class="input-row">
+          <input id="todo-input" type="text" placeholder="Add a task&hellip;" maxlength="500" autocomplete="off">
+          <button type="submit" class="btn-submit">Add</button>
+        </div>
+      </form>
+      <div id="todo-list"></div>
+    </div>
+
+    <!-- Suggestions -->
+    <div class="card" id="notes-card">
+      <div class="card-title">&#128172; Suggestions</div>
+      <form id="note-form" onsubmit="addNote(event)">
+        <div class="input-stack">
+          <input id="note-name" type="text" placeholder="Your name (optional)" maxlength="60" autocomplete="off">
+          <div class="input-row">
+            <input id="note-text" type="text" placeholder="Leave a suggestion&hellip;" maxlength="1000" autocomplete="off">
+            <button type="submit" class="btn-submit">Post</button>
+          </div>
+        </div>
+      </form>
+      <div id="notes-list"></div>
+    </div>
+
+    <!-- Network Devices -->
+    <div class="card devices-card" id="devices-card">
+      <div class="card-title">&#128225; Network Devices</div>
+      <div id="devices-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- News -->
+    <div class="card news-card" id="news-card">
+      <div class="card-title">&#128240; Top News</div>
+      <div id="news-content" class="news-scroll loading">Loading&hellip;</div>
+    </div>
+
+  </main>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
