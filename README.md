@@ -184,6 +184,51 @@ RSS feed URL works.
 
 ---
 
+## AI Agent Installation Instructions
+
+> **This section is for AI agents performing installation or updates on behalf of the user.**
+
+### First-time install
+
+1. **Check you are in the repo directory** — if not, `cd ~/WebServer` (or wherever it was cloned)
+2. **Check for local changes** — run `git status`. Note any modified files.
+3. **Preserve `config.json`** — this file contains the user's personal settings (coordinates, IPs, passwords). If it has been edited locally (or contains non-placeholder values), back it up before pulling:
+   ```bash
+   cp config.json config.json.bak
+   ```
+4. **Pull the latest code** — use rebase to avoid the divergent-branch error:
+   ```bash
+   git pull --rebase origin claude/setup-pi-dashboard-j0879
+   ```
+   If that fails due to conflicts on `config.json`, abort and do a hard reset instead, then restore the backup:
+   ```bash
+   git rebase --abort
+   git fetch origin claude/setup-pi-dashboard-j0879
+   git reset --hard origin/claude/setup-pi-dashboard-j0879
+   cp config.json.bak config.json
+   ```
+5. **Do NOT overwrite `config.json`** if it already has real values (city, IPs, passwords). Only overwrite it if it still contains placeholder values like `"Your City"`.
+6. **Do NOT touch `dashboard.db`** — this file is excluded from git and contains the user's live data (todos, grocery list, suggestions). Never delete or overwrite it.
+7. **Run the installer**:
+   ```bash
+   bash install.sh
+   ```
+8. Confirm the service is running: `sudo systemctl status pi-dashboard`
+
+### Updating an existing install
+
+Same as above from step 2. The installer is safe to re-run — it will update the nginx config, restart the service, and re-register the DNS entry.
+
+### Key files not to touch
+
+| File | Reason |
+|------|--------|
+| `config.json` | User's personal settings — preserve across pulls |
+| `dashboard.db` | Live SQLite data — never delete, not tracked in git |
+| `/etc/pihole/custom.list` | Managed by `install.sh` — don't edit manually |
+
+---
+
 ## Quick Start
 
 **1. Clone the repo onto the Pi**
