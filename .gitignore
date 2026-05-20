@@ -1,6 +1,10 @@
 # Database (contains user data — todos, suggestions)
 dashboard.db
 
+# Tribal Wars — personal game data, not for git
+tribalwars/tw_data.json
+tribalwars/CONTEXT.md
+
 # Python
 __pycache__/
 *.pyc
