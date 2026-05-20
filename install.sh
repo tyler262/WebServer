@@ -95,6 +95,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable pi-dashboard -q
 sudo systemctl restart pi-dashboard
 
+# Allow the dashboard to restart itself (for the OTA update button)
+SUDOERS_FILE="/etc/sudoers.d/pi-dashboard"
+echo "$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart pi-dashboard" \
+    | sudo tee "$SUDOERS_FILE" > /dev/null
+sudo chmod 440 "$SUDOERS_FILE"
+
 sleep 2
 
 if systemctl is-active --quiet pi-dashboard; then

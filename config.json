@@ -53,6 +53,10 @@
     "smtp_password": "",
     "recipients": []
   },
+  "update": {
+    "password": "",
+    "branch": "claude/setup-pi-dashboard-j0879"
+  },
   "photo": {
     "source": "picsum",
     "nasa_api_key": ""

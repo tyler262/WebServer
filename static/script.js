@@ -1,3 +1,61 @@
+// ── OTA Update ────────────────────────────────────────────────────────────────
+function openUpdateModal() {
+  document.getElementById("update-modal").style.display = "flex";
+  document.getElementById("update-pw").focus();
+}
+
+function closeUpdateModal() {
+  document.getElementById("update-modal").style.display = "none";
+  document.getElementById("update-body").innerHTML = `
+    <p class="modal-hint">Pulls the latest code from GitHub and restarts the server.</p>
+    <div class="input-row">
+      <input id="update-pw" type="password" placeholder="Password" autocomplete="off"
+             onkeydown="if(event.key==='Enter')runUpdate()">
+      <button class="btn-submit" onclick="runUpdate()">Pull &amp; Restart</button>
+    </div>`;
+}
+
+async function runUpdate() {
+  const pw = document.getElementById("update-pw").value;
+  if (!pw) return;
+
+  const body = document.getElementById("update-body");
+  body.innerHTML = `<p class="modal-hint">Pulling from GitHub…</p>`;
+
+  try {
+    const res = await fetch("/api/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pw }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      body.innerHTML = `
+        <p class="modal-hint" style="color:var(--danger)">&#10005; ${escapeHtml(data.error)}</p>
+        <pre class="modal-output">${escapeHtml(data.output || "")}</pre>
+        <button class="btn-submit" onclick="closeUpdateModal()" style="margin-top:.5rem">Close</button>`;
+      return;
+    }
+
+    let secs = 8;
+    body.innerHTML = `
+      <p class="modal-hint" style="color:var(--success)">&#10003; Update successful — restarting…</p>
+      <pre class="modal-output">${escapeHtml(data.output || "")}</pre>
+      <p class="modal-status" id="reload-countdown">Page reloads in ${secs}s</p>`;
+
+    const interval = setInterval(() => {
+      secs--;
+      const el = document.getElementById("reload-countdown");
+      if (el) el.textContent = `Page reloads in ${secs}s`;
+      if (secs <= 0) { clearInterval(interval); location.reload(); }
+    }, 1000);
+
+  } catch (e) {
+    body.innerHTML = `<p class="modal-hint" style="color:var(--danger)">&#10005; ${escapeHtml(e.message)}</p>`;
+  }
+}
+
 // ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock() {
   const now = new Date();

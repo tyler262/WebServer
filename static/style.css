@@ -45,6 +45,55 @@ header {
   font-variant-numeric: tabular-nums;
 }
 
+.btn-update {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--muted);
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.btn-update:hover { color: var(--accent); border-color: var(--accent); }
+
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  width: min(420px, 92vw);
+  padding: 1.25rem;
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 600; margin-bottom: 1rem;
+}
+.modal-close {
+  background: none; border: none; color: var(--muted);
+  font-size: 1rem; cursor: pointer; padding: 0 4px;
+}
+.modal-close:hover { color: var(--danger); }
+.modal-hint { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
+.modal-output {
+  margin-top: 0.75rem;
+  background: #0a0e18;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: #a0c4a0;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.modal-status { margin-top: 0.6rem; font-size: 0.85rem; }
+
 /* ── Grid ────────────────────────────────── */
 .grid {
   display: grid;

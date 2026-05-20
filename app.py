@@ -15,10 +15,11 @@ import psutil
 import requests
 
 app = Flask(__name__)
-CONFIG_FILE  = os.path.join(os.path.dirname(__file__), "config.json")
-DB_FILE      = os.path.join(os.path.dirname(__file__), "dashboard.db")
-TW_DATA_FILE = os.path.join(os.path.dirname(__file__), "tribalwars", "tw_data.json")
-TW_DIR       = os.path.join(os.path.dirname(__file__), "tribalwars")
+BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE  = os.path.join(BASE_DIR, "config.json")
+DB_FILE      = os.path.join(BASE_DIR, "dashboard.db")
+TW_DATA_FILE = os.path.join(BASE_DIR, "tribalwars", "tw_data.json")
+TW_DIR       = os.path.join(BASE_DIR, "tribalwars")
 
 
 # ── Database ───────────────────────────────────────────────────────────────────
@@ -817,6 +818,52 @@ def tw_scripts(filename):
     """Serve scripts from the tribalwars/ folder.
     Enter http://your-pi-ip:8888/tw/sync.js in the TW Script URL field."""
     return send_from_directory(TW_DIR, filename)
+
+
+# ── OTA Update ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/update", methods=["POST"])
+def ota_update():
+    config = load_config()
+    update_cfg = config.get("update", {})
+    expected_pw = update_cfg.get("password", "").strip()
+    branch = update_cfg.get("branch", "main").strip()
+
+    if not expected_pw:
+        return jsonify({"error": "Set update.password in config.json first"}), 403
+
+    data = request.get_json(silent=True) or {}
+    if data.get("password") != expected_pw:
+        return jsonify({"error": "Wrong password"}), 403
+
+    # Preserve config.json across the reset — it has local settings not in git
+    import shutil
+    config_bak = CONFIG_FILE + ".update-bak"
+    shutil.copy2(CONFIG_FILE, config_bak)
+
+    lines = []
+    try:
+        for cmd in [
+            ["git", "fetch", "origin", branch],
+            ["git", "reset", "--hard", f"origin/{branch}"],
+        ]:
+            r = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, text=True, timeout=60)
+            lines.append(f"$ {' '.join(cmd)}")
+            lines.append((r.stdout + r.stderr).strip())
+            if r.returncode != 0:
+                shutil.copy2(config_bak, CONFIG_FILE)
+                return jsonify({"error": "git failed", "output": "\n".join(lines)}), 500
+    finally:
+        shutil.copy2(config_bak, CONFIG_FILE)
+        os.remove(config_bak)
+
+    def _restart():
+        time.sleep(2)
+        subprocess.run(["sudo", "systemctl", "restart", "pi-dashboard"])
+
+    threading.Thread(target=_restart, daemon=True).start()
+
+    return jsonify({"ok": True, "output": "\n".join(lines)})
 
 
 if __name__ == "__main__":
