@@ -2,11 +2,13 @@ from flask import Flask, jsonify, render_template, request
 import json
 import os
 import random
+import smtplib
 import socket
 import sqlite3
 import subprocess
 import threading
 import time
+from email.mime.text import MIMEText
 
 import feedparser
 import psutil
@@ -143,6 +145,44 @@ def send_notification(title: str, message: str, tags: list = None):
             pass
 
     threading.Thread(target=_fire, daemon=True).start()
+
+
+# ── SMS via email-to-SMS gateway ───────────────────────────────────────────────
+
+def send_sms(title: str, message: str):
+    """Non-blocking SMS via carrier email-to-SMS gateway (Gmail SMTP)."""
+    config = load_config()
+    sms_cfg = config.get("sms", {})
+    recipients = sms_cfg.get("recipients", [])
+    smtp_user = sms_cfg.get("smtp_user", "").strip()
+    smtp_password = sms_cfg.get("smtp_password", "").strip()
+    if not recipients or not smtp_user or not smtp_password:
+        return
+
+    smtp_host = sms_cfg.get("smtp_host", "smtp.gmail.com")
+    smtp_port = int(sms_cfg.get("smtp_port", 587))
+
+    def _fire():
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                for recipient in recipients:
+                    msg = MIMEText(message)
+                    msg["From"] = smtp_user
+                    msg["To"] = recipient
+                    msg["Subject"] = title
+                    server.sendmail(smtp_user, recipient, msg.as_string())
+        except Exception:
+            pass
+
+    threading.Thread(target=_fire, daemon=True).start()
+
+
+def notify(title: str, message: str, tags: list = None):
+    """Send both a push notification (ntfy) and an SMS."""
+    send_notification(title, message, tags=tags)
+    send_sms(title, message)
 
 
 # ── Pi-hole v6 auth ────────────────────────────────────────────────────────────
@@ -511,7 +551,7 @@ def update_todo(todo_id):
     old_status = old["status"] if "status" in old.keys() else 0
     if new_status > old_status and new_status in _TODO_NOTIFY:
         title, tags = _TODO_NOTIFY[new_status]
-        send_notification(title, row["text"], tags=tags)
+        notify(title, row["text"], tags=tags)
 
     return jsonify(dict(row))
 
@@ -549,7 +589,7 @@ def add_note():
     conn.commit()
     row = conn.execute("SELECT * FROM notes WHERE id = ?", (cur.lastrowid,)).fetchone()
     conn.close()
-    send_notification(
+    notify(
         f"💬 {name or 'Anonymous'} left a suggestion",
         text,
         tags=["speech_balloon"],
@@ -589,7 +629,7 @@ def add_grocery():
     conn.commit()
     row = conn.execute("SELECT * FROM groceries WHERE id = ?", (cur.lastrowid,)).fetchone()
     conn.close()
-    send_notification("🛒 Grocery list", f"Added: {text}", tags=["shopping_cart"])
+    notify("🛒 Grocery list", f"Added: {text}", tags=["shopping_cart"])
     return jsonify(dict(row)), 201
 
 

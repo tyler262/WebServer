@@ -63,6 +63,31 @@ step "Installing Python packages"
 pip3 install -q -r "$SCRIPT_DIR/requirements.txt"
 ok "flask, requests, feedparser, psutil"
 
+# ── Pi-hole port conflict check ───────────────────────────────────────────────
+# Pi-hole v6 runs its own web server and defaults to port 80.
+# nginx also needs port 80 for the dashboard pretty URL.
+# If pihole-FTL is holding port 80, move it to 8080 first.
+
+if ss -tlnp 2>/dev/null | grep -q '0\.0\.0\.0:80.*pihole\|:::80.*pihole'; then
+    step "Pi-hole is on port 80 — moving it to port 8080"
+    PIHOLE_TOML="/etc/pihole/pihole.toml"
+    if [[ -f "$PIHOLE_TOML" ]]; then
+        sudo cp "$PIHOLE_TOML" "${PIHOLE_TOML}.installer-bak"
+        # Replace port 80 with 8080 in the webserver section only
+        sudo sed -i 's/\(port *= *"\)80/\18080/' "$PIHOLE_TOML"
+        sudo systemctl restart pihole-FTL
+        sleep 3
+        ok "Pi-hole web UI moved to port 8080"
+        warn "Pi-hole admin is now at: http://$(hostname -I | awk '{print $1}'):8080/admin"
+    else
+        warn "Could not find /etc/pihole/pihole.toml"
+        warn "Move Pi-hole off port 80 manually before running this again:"
+        warn "  sudo pihole-FTL --config webserver.port 8080"
+        warn "  sudo systemctl restart pihole-FTL"
+        exit 1
+    fi
+fi
+
 # ── nginx reverse proxy ───────────────────────────────────────────────────────
 step "Configuring nginx (port 80 → Flask on $FLASK_PORT)"
 
@@ -176,7 +201,7 @@ if grep -q '"Your City"' "$CONFIG"; then
     warn "    weather.city / latitude / longitude   (find coords: latlong.net)"
     warn "    tvs[*].ip                             (your Hisense TV IPs)"
     warn "    devices[*].ip                         (phones, router, etc.)"
-    warn "    pihole.api_key                        (Pi-hole admin → Settings → API)"
+    warn "    pihole.password                       (Pi-hole v6: your web UI password)"
     CONFIG_OK=false
 else
     ok "config.json looks configured"

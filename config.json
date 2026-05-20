@@ -46,6 +46,13 @@
     "topic": "",
     "server": "https://ntfy.sh"
   },
+  "sms": {
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_user": "",
+    "smtp_password": "",
+    "recipients": []
+  },
   "photo": {
     "source": "picsum",
     "nasa_api_key": ""

@@ -351,6 +351,46 @@ Notifications fire automatically when:
 
 ---
 
+### SMS (text messages)
+```json
+"sms": {
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "smtp_user": "youremail@gmail.com",
+  "smtp_password": "your-app-password",
+  "recipients": [
+    "5551234567@vtext.com",
+    "5559876543@vtext.com"
+  ]
+}
+```
+
+SMS is sent free via your carrier's email-to-SMS gateway — no third-party service needed. The Pi emails the gateway address and it converts it to a text.
+
+**Carrier gateway addresses** (use the 10-digit number with no spaces or dashes):
+
+| Carrier | SMS gateway |
+|---------|-------------|
+| Verizon | `number@vtext.com` |
+| Xfinity Mobile | `number@vtext.com` (uses Verizon towers) |
+| AT&T | `number@txt.att.net` |
+| T-Mobile | `number@tmomail.net` |
+
+**To set up (Gmail):**
+
+1. Go to your Google Account → Security → **2-Step Verification** → **App passwords**
+2. Create an app password (name it "Pi Dashboard" or anything)
+3. Copy the 16-character password it gives you
+4. Fill in `config.json`:
+   - `smtp_user` — your Gmail address
+   - `smtp_password` — the 16-character app password (not your regular Gmail password)
+   - `recipients` — each phone as `number@vtext.com`
+5. Restart the service: `sudo systemctl restart pi-dashboard`
+
+The same events that trigger ntfy notifications also send SMS. You can use both at the same time, or just one, or neither — each is independent.
+
+---
+
 ### Photo
 ```json
 "photo": {
