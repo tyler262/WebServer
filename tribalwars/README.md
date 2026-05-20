@@ -1,92 +1,98 @@
 # Tribal Wars Scripts
 
-Scripts that run inside the Tribal Wars browser session and sync data
-back to the Pi dashboard. All scripts are plain JavaScript — no installs,
-no extensions required.
+Scripts that run inside the Tribal Wars browser session. TW has jQuery
+loaded on every page, so scripts are loaded with `$.getScript()` — no
+extensions or installs needed.
 
 ---
 
-## How to run a script
+## How to add a script (Edit Link dialog)
 
-### Method 1 — Script URL (recommended, requires Premium)
-1. Open any village in Tribal Wars
-2. Go to the **Overview** screen
-3. Find the **Script** field (bottom of the page)
-4. Enter the URL: `http://192.168.1.4:8888/tw/sync.js`
-5. Click the arrow/run button
+1. In-game, go to **Edit Links** (the pencil icon on your sidebar links)
+2. Click **Add new link**
+3. Fill in:
+   - **Entry name**: whatever you want to call it (e.g. `TW Sync`)
+   - **Target URL**: `javascript:$.getScript('http://192.168.1.4:8888/tw/sync.js');`
+4. Save — the link appears in your sidebar and runs the script on click
 
-The Pi serves the scripts directly, so changes take effect immediately
-without needing to copy/paste anything.
+The Pi serves the scripts directly at `http://192.168.1.4:8888/tw/<name>.js`,
+so any edit you make to the file takes effect immediately without touching
+the in-game link.
 
-### Method 2 — Browser console
-1. Press **F12** to open developer tools
-2. Go to the **Console** tab
-3. Paste the entire contents of the `.js` file
-4. Press Enter
+### Quick-copy link targets
 
-### Method 3 — Bookmarklet
-1. Create a new browser bookmark
-2. Set the URL to:
-   ```
-   javascript:(function(){var s=document.createElement('script');s.src='http://192.168.1.4:8888/tw/sync.js?_='+Date.now();document.head.appendChild(s);})();
-   ```
-3. Click the bookmark while on any Tribal Wars page
+| Script | Target URL |
+|--------|-----------|
+| `sync.js` | `javascript:$.getScript('http://192.168.1.4:8888/tw/sync.js');` |
+
+---
+
+## Alternate run methods
+
+**Browser console** — press F12, paste the file contents, hit Enter.
+
+**Direct script URL** (Premium feature) — on the Overview screen, find
+the Script field and enter `http://192.168.1.4:8888/tw/sync.js`.
 
 ---
 
 ## Scripts
 
-### `sync.js` — Data sync
-**Run this first.** Collects your villages, tribe, neighbors, and world
-rankings from public map data and POSTs it to the Pi.
+### `sync.js` — Account data sync
+**Run this first, and whenever your situation changes.**
 
-What it sends to the Pi:
+Fetches public map data, extracts your slice of it, and POSTs a JSON
+summary to the Pi. The Pi stores it and regenerates `CONTEXT.md`.
+
+What it collects:
 - Your player info (rank, points, tribe)
-- All your villages with coordinates
+- All your villages and coordinates
 - Your tribe members
-- Top 30 tribes and top 100 players
-- All players with villages within 25 tiles of yours (neighbors)
+- Top 30 tribes and top 100 players world-wide
+- All players with a village within 25 tiles of yours (neighbors)
 
-After running, the Pi updates:
-- `tribalwars/CONTEXT.md` — human/agent-readable summary
-- `tribalwars/tw_data.json` — raw JSON (gitignored)
-
-Run it whenever your situation changes significantly (new villages,
-wars start, etc.).
+After running:
+- `tribalwars/CONTEXT.md` is updated — readable by agents and humans
+- `tribalwars/tw_data.json` is updated — raw data, gitignored
 
 ---
 
-## Adding more scripts
+## Adding new scripts
 
-Drop any `.js` file into this folder. It will be automatically served
-at `http://192.168.1.4:8888/tw/<filename>.js`.
+Drop any `.js` file into this `tribalwars/` folder and it's immediately
+available at `http://192.168.1.4:8888/tw/<filename>.js`.
 
-For portability (sharing with a friend), put a configurable constant
-at the top of each script:
+Put this at the top of every script for portability:
 
 ```javascript
-const PI_URL = 'http://192.168.1.4:8888';  // ← change to your Pi's IP
+const PI_URL = 'http://192.168.1.4:8888';  // ← change if your Pi IP differs
+```
+
+The in-game link target becomes:
+```
+javascript:$.getScript('http://192.168.1.4:8888/tw/yourscript.js');
 ```
 
 ---
 
 ## Rules
 
-Tribal Wars explicitly permits player-triggered scripts. These scripts:
-- Are triggered manually by you clicking run
-- Do not automate gameplay or send attacks on a timer
-- Only read data and display/export it
+Tribal Wars permits player-triggered scripts. The rule is simple:
+- **Allowed**: scripts you manually click to run
+- **Banned**: bots that act automatically without your input
 
-Bots that act without user input are banned. These scripts are not bots.
+Everything in this folder requires a deliberate click to run.
 
 ---
 
 ## For AI agents
 
-See `CONTEXT.md` for the current game state. It is auto-generated when
-`sync.js` is run. The raw data is in `tw_data.json` (not in git).
+Read `CONTEXT.md` first — it has player profile, villages, tribe,
+neighbors, and top world rankings. It is auto-generated by `sync.js`
+and has a **Notes** section at the bottom for manual context (enemies,
+wars, diplomacy) that survives re-syncs.
 
-To read raw data programmatically:
+Raw data endpoint:
 ```
 GET http://192.168.1.4:8888/api/tw/data
 ```
