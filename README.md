@@ -217,7 +217,7 @@ RSS feed URL works.
 
 ### Updating an existing install
 
-Same as above from step 2. The installer is safe to re-run — it will update the nginx config, restart the service, and re-register the DNS entry.
+Same as above from step 2. The installer is safe to re-run — it will update the venv, restart the service, and re-register the DNS entry.
 
 ### Key files not to touch
 
@@ -453,26 +453,22 @@ unless you factory reset the TV.
 
 ## Pretty URL
 
-The installer sets up `http://dashboard.home` so you can reach the dashboard
-from any device on your network without remembering an IP address or port number.
+The installer sets up `http://dashboard.home:8888` so you can reach the
+dashboard from any device on your Wi-Fi by name instead of IP address.
 
 **How it works:**
 
 ```
-Your phone               Pi-hole            Raspberry Pi
-─────────────            ────────           ────────────
-Opens                    Resolves           nginx on port 80
-http://dashboard.home ──→ dashboard.home ──→ proxies to Flask
-                         to Pi's IP         on port 5000
+Your phone                    Pi-hole            Raspberry Pi
+─────────────                 ────────           ────────────
+Opens                         Resolves           Flask on port 8888
+http://dashboard.home:8888 ──→ dashboard.home ──→ serves the dashboard
+                              to Pi's IP         directly
 ```
 
-1. **Pi-hole DNS** — The installer adds `dashboard.home → Pi's IP` to
-   `/etc/pihole/custom.list`. Since Pi-hole is the DNS server for your whole
-   network, every device on your Wi-Fi resolves that name to the Pi.
-
-2. **nginx reverse proxy** — The installer puts nginx in front of Flask.
-   nginx listens on port 80 (the default HTTP port), so there's no `:5000`
-   in the URL. It forwards requests to Flask running locally on port 5000.
+Pi-hole is already running on port 80, so the dashboard runs directly on
+port 8888 — no nginx needed. The only piece the installer adds is a Pi-hole
+DNS record so the name `dashboard.home` resolves to the Pi's IP.
 
 **To change the hostname** (e.g. to `home.lan` or `pi.home`), edit the
 `DASHBOARD_HOSTNAME` line near the top of `install.sh` and re-run it.
@@ -484,17 +480,15 @@ http://dashboard.home ──→ dashboard.home ──→ proxies to Flask
 Running `bash install.sh` does these steps in order:
 
 1. Checks Python 3 and sudo are available
-2. Runs `apt install nginx android-tools-adb python3-pip`
-3. Runs `pip install flask requests feedparser psutil`
-4. Writes an nginx config to `/etc/nginx/sites-available/pi-dashboard`
-   that proxies port 80 to Flask on port 5000
-5. Writes a systemd service to `/etc/systemd/system/pi-dashboard.service`
+2. Runs `apt install python3-venv android-tools-adb` if not already present
+3. Creates a Python virtualenv at `.venv/` and installs packages into it
+4. Writes a systemd service to `/etc/systemd/system/pi-dashboard.service`
    with your exact username and project path baked in, then enables and
    starts it
-6. Adds `<Pi IP> dashboard.home` to `/etc/pihole/custom.list` and restarts
+5. Adds `<Pi IP> dashboard.home` to `/etc/pihole/custom.list` and restarts
    Pi-hole's DNS
-7. Checks if `config.json` still has placeholder values and warns you if so
-8. Prints the dashboard URL
+6. Checks if `config.json` still has placeholder values and warns you if so
+7. Prints the dashboard URL
 
 The installer is safe to re-run if anything goes wrong or if you change the
 hostname.
@@ -517,12 +511,6 @@ sudo journalctl -u pi-dashboard -f
 
 # Stop it
 sudo systemctl stop pi-dashboard
-```
-
-nginx also starts on boot automatically. If you change the nginx config:
-```bash
-sudo nginx -t                   # test the config first
-sudo systemctl reload nginx     # apply without dropping connections
 ```
 
 ---
@@ -577,10 +565,10 @@ personal data — todos and suggestions. It lives only on the Pi.
 
 ## Troubleshooting
 
-**Dashboard won't load at `http://dashboard.home`**
-- Check nginx is running: `sudo systemctl status nginx`
+**Dashboard won't load at `http://dashboard.home:8888`**
 - Check Flask is running: `sudo systemctl status pi-dashboard`
-- Try the direct IP first: `http://192.168.x.x` — if that works, the issue is DNS
+- Try the direct IP first: `http://192.168.x.x:8888` — if that works, the issue is DNS
+- Make sure port 8888 is in the URL — there's no nginx proxy, Flask serves directly
 - Make sure your device is using Pi-hole as its DNS (it should be if Pi-hole is your router's DNS)
 
 **Weather shows an error**

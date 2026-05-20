@@ -17,8 +17,9 @@ die()  { echo -e "\n  ${RED}✗  $*${NC}\n"; exit 1; }
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_USER="${SUDO_USER:-$USER}"
-FLASK_PORT=5000
+FLASK_PORT=8888
 DASHBOARD_HOSTNAME="dashboard.home"   # Change this if you prefer e.g. home.lan
+VENV_DIR="$SCRIPT_DIR/.venv"
 
 # ── Header ────────────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}╔══════════════════════════════════════╗${NC}"
@@ -44,83 +45,30 @@ echo "    Updating package list…"
 sudo apt-get update -qq
 
 PKGS=()
-command -v pip3   &>/dev/null || PKGS+=(python3-pip)
-command -v nginx  &>/dev/null || PKGS+=(nginx)
-command -v adb    &>/dev/null || PKGS+=(android-tools-adb)
+python3 -m venv --help &>/dev/null || PKGS+=(python3-venv)
+command -v adb &>/dev/null         || PKGS+=(android-tools-adb)
 
 if [[ ${#PKGS[@]} -gt 0 ]]; then
     echo "    Installing: ${PKGS[*]}"
     sudo apt-get install -y -qq "${PKGS[@]}"
 fi
 
-ok "python3-pip"
-ok "nginx"
+ok "python3-venv"
 ok "adb (Android Debug Bridge)"
 
-# ── Python packages ───────────────────────────────────────────────────────────
-step "Installing Python packages"
+# ── Python virtualenv + packages ──────────────────────────────────────────────
+step "Setting up Python virtual environment"
 
-pip3 install -q -r "$SCRIPT_DIR/requirements.txt"
-ok "flask, requests, feedparser, psutil"
-
-# ── Pi-hole port conflict check ───────────────────────────────────────────────
-# Pi-hole v6 runs its own web server and defaults to port 80.
-# nginx also needs port 80 for the dashboard pretty URL.
-# If pihole-FTL is holding port 80, move it to 8080 first.
-
-if ss -tlnp 2>/dev/null | grep -q '0\.0\.0\.0:80.*pihole\|:::80.*pihole'; then
-    step "Pi-hole is on port 80 — moving it to port 8080"
-    PIHOLE_TOML="/etc/pihole/pihole.toml"
-    if [[ -f "$PIHOLE_TOML" ]]; then
-        sudo cp "$PIHOLE_TOML" "${PIHOLE_TOML}.installer-bak"
-        # Replace port 80 with 8080 in the webserver section only
-        sudo sed -i 's/\(port *= *"\)80/\18080/' "$PIHOLE_TOML"
-        sudo systemctl restart pihole-FTL
-        sleep 3
-        ok "Pi-hole web UI moved to port 8080"
-        warn "Pi-hole admin is now at: http://$(hostname -I | awk '{print $1}'):8080/admin"
-    else
-        warn "Could not find /etc/pihole/pihole.toml"
-        warn "Move Pi-hole off port 80 manually before running this again:"
-        warn "  sudo pihole-FTL --config webserver.port 8080"
-        warn "  sudo systemctl restart pihole-FTL"
-        exit 1
-    fi
-fi
-
-# ── nginx reverse proxy ───────────────────────────────────────────────────────
-step "Configuring nginx (port 80 → Flask on $FLASK_PORT)"
-
-NGINX_CONF="/etc/nginx/sites-available/pi-dashboard"
-
-sudo tee "$NGINX_CONF" > /dev/null <<NGINX
-server {
-    listen 80 default_server;
-    server_name $DASHBOARD_HOSTNAME _;
-
-    location / {
-        proxy_pass         http://127.0.0.1:$FLASK_PORT;
-        proxy_http_version 1.1;
-        proxy_set_header   Host            \$host;
-        proxy_set_header   X-Real-IP       \$remote_addr;
-        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_read_timeout 30s;
-    }
-}
-NGINX
-
-sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/pi-dashboard
-
-# Remove the default nginx page so it doesn't conflict
-sudo rm -f /etc/nginx/sites-enabled/default
-
-if sudo nginx -t -q 2>/dev/null; then
-    sudo systemctl reload nginx
-    sudo systemctl enable nginx -q
-    ok "nginx configured and running"
+if [[ ! -d "$VENV_DIR" ]]; then
+    python3 -m venv "$VENV_DIR"
+    ok "Created venv at $VENV_DIR"
 else
-    warn "nginx config test failed — check: sudo nginx -t"
+    ok "venv already exists"
 fi
+
+"$VENV_DIR/bin/pip" install -q --upgrade pip
+"$VENV_DIR/bin/pip" install -q -r "$SCRIPT_DIR/requirements.txt"
+ok "flask, requests, feedparser, psutil installed in venv"
 
 # ── systemd service ───────────────────────────────────────────────────────────
 step "Setting up systemd service"
@@ -134,7 +82,7 @@ After=network.target
 Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$SCRIPT_DIR
-ExecStart=$(command -v python3) $SCRIPT_DIR/app.py
+ExecStart=$VENV_DIR/bin/python $SCRIPT_DIR/app.py
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -150,7 +98,7 @@ sudo systemctl restart pi-dashboard
 sleep 2
 
 if systemctl is-active --quiet pi-dashboard; then
-    ok "pi-dashboard service running"
+    ok "pi-dashboard service running on port $FLASK_PORT"
 else
     warn "Service may have failed — check: sudo journalctl -u pi-dashboard -n 20"
 fi
@@ -172,7 +120,6 @@ if [[ -f "$CUSTOM_LIST" ]]; then
         DNS_OK=true
     fi
 
-    # Restart Pi-hole DNS resolver
     if command -v pihole &>/dev/null; then
         pihole restartdns &>/dev/null \
             || sudo systemctl restart pihole-FTL &>/dev/null \
@@ -215,13 +162,13 @@ echo -e "${BOLD}╚════════════════════�
 echo ""
 echo -e "  ${BOLD}Open the dashboard on any device on your network:${NC}"
 echo -e ""
-echo -e "    ${GRN}${BOLD}http://$DASHBOARD_HOSTNAME${NC}     ← pretty URL (via Pi-hole DNS)"
-echo -e "    ${GRN}http://$PI_IP${NC}        ← direct IP (always works)"
+echo -e "    ${GRN}${BOLD}http://$DASHBOARD_HOSTNAME:$FLASK_PORT${NC}     ← pretty URL (via Pi-hole DNS)"
+echo -e "    ${GRN}http://$PI_IP:$FLASK_PORT${NC}        ← direct IP (always works)"
 echo ""
 echo -e "  ${BOLD}Useful commands:${NC}"
 echo -e "    sudo systemctl restart pi-dashboard"
 echo -e "    sudo journalctl -u pi-dashboard -f        # live logs"
-echo -e "    sudo systemctl reload nginx"
+echo -e "    sudo systemctl status pi-dashboard"
 echo ""
 echo -e "  ${BOLD}TV setup (once per TV, using your remote):${NC}"
 echo -e "    1. Settings → Device Preferences → About"
