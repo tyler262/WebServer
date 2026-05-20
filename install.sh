@@ -110,14 +110,19 @@ PI_IP=$(hostname -I | awk '{print $1}')
 CUSTOM_LIST="/etc/pihole/custom.list"
 DNS_OK=false
 
-if [[ -f "$CUSTOM_LIST" ]]; then
+PIHOLE_DIR="/etc/pihole"
+
+if [[ -d "$PIHOLE_DIR" ]]; then
+    # Create the file if Pi-hole v6 hasn't made it yet
+    if [[ ! -f "$CUSTOM_LIST" ]]; then
+        sudo touch "$CUSTOM_LIST"
+    fi
+
     if grep -q "$DASHBOARD_HOSTNAME" "$CUSTOM_LIST" 2>/dev/null; then
         ok "$DASHBOARD_HOSTNAME already in Pi-hole DNS"
-        DNS_OK=true
     else
         echo "$PI_IP $DASHBOARD_HOSTNAME" | sudo tee -a "$CUSTOM_LIST" > /dev/null
         ok "Added  $DASHBOARD_HOSTNAME → $PI_IP"
-        DNS_OK=true
     fi
 
     if command -v pihole &>/dev/null; then
@@ -126,10 +131,11 @@ if [[ -f "$CUSTOM_LIST" ]]; then
             || true
         ok "Pi-hole DNS restarted"
     fi
+    DNS_OK=true
 fi
 
 if [[ "$DNS_OK" == false ]]; then
-    warn "Couldn't find Pi-hole's custom.list — add the DNS record manually:"
+    warn "Couldn't find /etc/pihole — add the DNS record manually:"
     warn "  Pi-hole admin → Local DNS → DNS Records"
     warn "  Hostname: $DASHBOARD_HOSTNAME   →   IP: $PI_IP"
 fi
