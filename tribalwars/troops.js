@@ -9,8 +9,6 @@
 
 (async function () {
 
-  const PI_URL = 'http://192.168.1.4:8888';
-
   if (typeof game_data === 'undefined') {
     alert('Run from inside Tribal Wars.');
     return;
@@ -134,23 +132,6 @@
      .appendTo($header);
 
     const $btnRow = $('<div>').css({ display: 'flex', gap: '8px' }).appendTo($header);
-
-    $('<button>').text('💾 Save to Pi').css({
-      background: '#4a7a3a', color: '#fff', border: 'none',
-      borderRadius: '3px', padding: '5px 12px', cursor: 'pointer',
-    }).on('click', async function () {
-      $(this).text('Saving…').prop('disabled', true);
-      try {
-        const r = await fetch(`${PI_URL}/api/tw/troops`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ synced_at: new Date().toISOString(), villages, totals }),
-        });
-        $(this).text(r.ok ? '✓ Saved' : '✗ Failed');
-      } catch (e) {
-        $(this).text('✗ ' + e.message);
-      }
-    }).appendTo($btnRow);
 
     $('<button>').text('✕ Close').css({
       background: '#7d5a28', color: '#fff', border: 'none',

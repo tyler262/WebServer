@@ -17,9 +17,8 @@ import requests
 app = Flask(__name__)
 CONFIG_FILE  = os.path.join(os.path.dirname(__file__), "config.json")
 DB_FILE      = os.path.join(os.path.dirname(__file__), "dashboard.db")
-TW_DATA_FILE   = os.path.join(os.path.dirname(__file__), "tribalwars", "tw_data.json")
-TW_TROOPS_FILE = os.path.join(os.path.dirname(__file__), "tribalwars", "troops_data.json")
-TW_DIR         = os.path.join(os.path.dirname(__file__), "tribalwars")
+TW_DATA_FILE = os.path.join(os.path.dirname(__file__), "tribalwars", "tw_data.json")
+TW_DIR       = os.path.join(os.path.dirname(__file__), "tribalwars")
 
 
 # ── Database ───────────────────────────────────────────────────────────────────
@@ -810,27 +809,6 @@ def tw_data():
     if not os.path.exists(TW_DATA_FILE):
         return jsonify({"error": "No data yet — run sync.js first"}), 404
     with open(TW_DATA_FILE) as f:
-        return _tw_cors(jsonify(json.load(f)))
-
-
-@app.route("/api/tw/troops", methods=["POST", "OPTIONS"])
-def tw_troops_sync():
-    if request.method == "OPTIONS":
-        return _tw_cors(app.make_default_options_response())
-    data = request.get_json(silent=True)
-    if not data:
-        return _tw_cors(jsonify({"error": "No JSON body"})), 400
-    os.makedirs(TW_DIR, exist_ok=True)
-    with open(TW_TROOPS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-    return _tw_cors(jsonify({"ok": True, "villages": len(data.get("villages", []))}))
-
-
-@app.route("/api/tw/troops", methods=["GET"])
-def tw_troops_data():
-    if not os.path.exists(TW_TROOPS_FILE):
-        return jsonify({"error": "No data yet — run troops.js first"}), 404
-    with open(TW_TROOPS_FILE) as f:
         return _tw_cors(jsonify(json.load(f)))
 
 
