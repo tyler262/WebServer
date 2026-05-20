@@ -24,6 +24,7 @@ the in-game link.
 | Script | Target URL |
 |--------|-----------|
 | `sync.js` | `javascript:$.getScript('http://192.168.1.4:8888/tw/sync.js');` |
+| `troops.js` | `javascript:$.getScript('http://192.168.1.4:8888/tw/troops.js');` |
 
 ---
 
@@ -54,6 +55,18 @@ What it collects:
 After running:
 - `tribalwars/CONTEXT.md` is updated — readable by agents and humans
 - `tribalwars/tw_data.json` is updated — raw data, gitignored
+
+### `troops.js` — Troop overview
+Shows a table of troops **currently at home** in each of your villages.
+Fetches the authenticated troops overview page from TW, parses it, and
+displays an in-game overlay with every unit type and a totals row.
+
+Has a **Save to Pi** button that stores the snapshot at
+`tribalwars/troops_data.json` (gitignored) and serves it at
+`GET http://192.168.1.4:8888/api/tw/troops`.
+
+Note: only shows troops currently at home — troops out on attacks or
+support missions won't appear until they return.
 
 ---
 

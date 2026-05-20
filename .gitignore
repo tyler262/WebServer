@@ -3,6 +3,7 @@ dashboard.db
 
 # Tribal Wars — personal game data, not for git
 tribalwars/tw_data.json
+tribalwars/troops_data.json
 tribalwars/CONTEXT.md
 
 # Python
