@@ -10,26 +10,8 @@
   <header>
     <div class="header-title">&#127968; Home Dashboard</div>
     <div id="clock" class="header-clock"></div>
-    <button class="btn-update" onclick="openUpdateModal()" title="Pull latest from GitHub and restart">&#8593; Update</button>
+    <a href="/settings" class="btn-update">&#9881; Settings</a>
   </header>
-
-  <!-- Update modal -->
-  <div id="update-modal" class="modal-backdrop" style="display:none" onclick="if(event.target===this)closeUpdateModal()">
-    <div class="modal-box">
-      <div class="modal-header">
-        <span>&#8593; Update Dashboard</span>
-        <button class="modal-close" onclick="closeUpdateModal()">&#10005;</button>
-      </div>
-      <div id="update-body">
-        <p class="modal-hint">Pulls the latest code from GitHub and restarts the server.</p>
-        <div class="input-row">
-          <input id="update-pw" type="password" placeholder="Password" autocomplete="off"
-                 onkeydown="if(event.key==='Enter')runUpdate()">
-          <button class="btn-submit" onclick="runUpdate()">Pull &amp; Restart</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <main class="grid">
 

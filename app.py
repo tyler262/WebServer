@@ -95,19 +95,6 @@ def init_db():
         )
     """)
 
-    # Seed weather_cities from config on first run
-    if conn.execute("SELECT COUNT(*) FROM weather_cities").fetchone()[0] == 0:
-        try:
-            cfg = json.load(open(CONFIG_FILE))
-            w = cfg.get("weather", {})
-            if w.get("city") and w.get("city") != "Your City":
-                conn.execute(
-                    "INSERT INTO weather_cities (name, latitude, longitude) VALUES (?,?,?)",
-                    (w["city"], w["latitude"], w["longitude"]),
-                )
-        except Exception:
-            pass
-
     conn.commit()
     conn.close()
 
@@ -391,6 +378,55 @@ def index():
     return render_template("index.html", tvs=config.get("tvs", []))
 
 
+@app.route("/settings")
+def settings_page():
+    return render_template("settings.html")
+
+
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    return jsonify(load_config())
+
+
+@app.route("/api/config", methods=["PATCH"])
+def patch_config():
+    data = request.get_json(silent=True) or {}
+    try:
+        config = load_config()
+        for key, val in data.items():
+            config[key] = val
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config, f, indent=2)
+        if "weather" in data:
+            _cache.pop("weather_default", None)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/geocode")
+def geocode():
+    name = (request.args.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name required"}), 400
+    try:
+        geo = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": name, "count": 1, "language": "en", "format": "json"},
+            timeout=8,
+        ).json()
+        results = geo.get("results") or []
+        if not results:
+            return jsonify({"error": f"City not found: {name}"}), 404
+        r = results[0]
+        display = r["name"]
+        if r.get("admin1"):
+            display += f", {r['admin1']}"
+        return jsonify({"name": display, "latitude": r["latitude"], "longitude": r["longitude"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 def _fetch_weather_for(lat, lon, units="fahrenheit"):
     r = requests.get(
         "https://api.open-meteo.com/v1/forecast",
@@ -420,14 +456,30 @@ def _fetch_weather_for(lat, lon, units="fahrenheit"):
 @app.route("/api/weather")
 def weather():
     config = load_config()
-    units = config.get("weather", {}).get("units", "fahrenheit")
+    w = config.get("weather", {})
+    units = w.get("units", "fahrenheit")
+    results = []
+
+    # Default city from config.json — shown first, not deletable from dashboard
+    if w.get("latitude") and w.get("city") and w.get("city") != "Your City":
+        cached = get_cache("weather_default", ttl=600)
+        if cached:
+            results.append(cached)
+        else:
+            try:
+                data = _fetch_weather_for(w["latitude"], w["longitude"], units)
+                data.update({"city_id": None, "name": w["city"], "is_default": True})
+                set_cache("weather_default", data)
+                results.append(data)
+            except Exception as e:
+                results.append({"city_id": None, "name": w["city"], "is_default": True, "error": str(e)})
+
+    # Additional cities from DB
     conn = get_db()
     cities = conn.execute(
         "SELECT * FROM weather_cities ORDER BY display_order, id"
     ).fetchall()
     conn.close()
-
-    results = []
     for city in cities:
         cache_key = f"weather_{city['id']}"
         cached = get_cache(cache_key, ttl=600)
@@ -436,12 +488,11 @@ def weather():
             continue
         try:
             data = _fetch_weather_for(city["latitude"], city["longitude"], units)
-            data["city_id"] = city["id"]
-            data["name"] = city["name"]
+            data.update({"city_id": city["id"], "name": city["name"], "is_default": False})
             set_cache(cache_key, data)
             results.append(data)
         except Exception as e:
-            results.append({"city_id": city["id"], "name": city["name"], "error": str(e)})
+            results.append({"city_id": city["id"], "name": city["name"], "is_default": False, "error": str(e)})
 
     return jsonify(results)
 

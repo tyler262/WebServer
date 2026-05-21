@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-title">&#9881; Settings</div>
+    <a href="/" class="btn-back">&#8592; Dashboard</a>
+  </header>
+
+  <main class="settings-main">
+
+    <!-- Update -->
+    <div class="card">
+      <div class="card-title">&#8593; Update Dashboard</div>
+      <p class="settings-hint">Pulls the latest code from GitHub and restarts the server.</p>
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <div class="input-row">
+          <input type="password" id="upd-pw" placeholder="Update password" onkeydown="if(event.key==='Enter')runUpdate()">
+          <button class="btn-submit" onclick="runUpdate()">Pull &amp; Restart</button>
+        </div>
+      </div>
+      <div id="upd-status" class="settings-status"></div>
+      <pre id="upd-output" class="settings-output" style="display:none"></pre>
+
+      <hr class="settings-divider">
+      <p class="settings-hint">Update settings</p>
+      <div class="fields-inline">
+        <div class="field-group">
+          <label class="field-label">Update password</label>
+          <input type="password" id="upd-cfg-pw" placeholder="Password for the action above">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Branch</label>
+          <input type="text" id="upd-branch" placeholder="main">
+        </div>
+      </div>
+      <button class="btn-submit" onclick="saveSection('update')">Save</button>
+      <div id="upd-cfg-status" class="settings-status"></div>
+    </div>
+
+    <!-- Weather -->
+    <div class="card">
+      <div class="card-title">&#127780; Weather</div>
+      <div class="field-group">
+        <label class="field-label">Default city</label>
+        <div class="input-row">
+          <input type="text" id="w-city" placeholder="City name…">
+          <button class="btn-submit" onclick="geocodeDefault()">Geocode</button>
+        </div>
+        <div id="w-geocode-hint" class="field-hint"></div>
+      </div>
+      <div class="fields-inline">
+        <div class="field-group">
+          <label class="field-label">Latitude</label>
+          <input type="number" id="w-lat" step="0.0001">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Longitude</label>
+          <input type="number" id="w-lon" step="0.0001">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Units</label>
+          <select id="w-units">
+            <option value="fahrenheit">Fahrenheit (&#176;F)</option>
+            <option value="celsius">Celsius (&#176;C)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-submit" onclick="saveSection('weather')">Save</button>
+      <div id="w-status" class="settings-status"></div>
+      <p class="settings-hint" style="margin-top:.6rem">Additional cities are managed from the weather card on the dashboard.</p>
+    </div>
+
+    <!-- Pi-hole -->
+    <div class="card">
+      <div class="card-title">&#128737; Pi-hole</div>
+      <div class="fields-inline">
+        <div class="field-group" style="flex:1">
+          <label class="field-label">Host</label>
+          <input type="text" id="ph-host" placeholder="localhost">
+        </div>
+        <div class="field-group" style="flex:2">
+          <label class="field-label">Password (v6 web UI password)</label>
+          <input type="password" id="ph-pw" placeholder="Leave blank if no password">
+        </div>
+      </div>
+      <button class="btn-submit" onclick="saveSection('pihole')">Save</button>
+      <div id="ph-status" class="settings-status"></div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="card">
+      <div class="card-title">&#128276; Notifications</div>
+      <p class="settings-hint">ntfy push notifications (free — install the ntfy app)</p>
+      <div class="fields-inline">
+        <div class="field-group">
+          <label class="field-label">Topic</label>
+          <input type="text" id="ntfy-topic" placeholder="my-dashboard-alerts">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Server</label>
+          <input type="text" id="ntfy-server" placeholder="https://ntfy.sh">
+        </div>
+      </div>
+      <hr class="settings-divider">
+      <p class="settings-hint">SMS via email-to-SMS gateway (Gmail SMTP)</p>
+      <div class="fields-inline">
+        <div class="field-group">
+          <label class="field-label">Gmail address</label>
+          <input type="email" id="sms-user" placeholder="you@gmail.com">
+        </div>
+        <div class="field-group">
+          <label class="field-label">App password</label>
+          <input type="password" id="sms-pw" placeholder="16-char app password">
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">SMS recipients</label>
+        <div id="sms-recipients-list" class="array-list"></div>
+        <div class="input-row" style="margin-top:.4rem">
+          <input type="text" id="sms-recipient-new" placeholder="10digit@vtext.com">
+          <button class="btn-submit" onclick="addSmsRecipient()">Add</button>
+        </div>
+      </div>
+      <button class="btn-submit" onclick="saveSection('notifications')">Save</button>
+      <div id="notif-status" class="settings-status"></div>
+    </div>
+
+    <!-- Calendar -->
+    <div class="card">
+      <div class="card-title">&#128197; Calendar Notifications</div>
+      <div class="fields-inline">
+        <div class="field-group">
+          <label class="field-label">Morning brief</label>
+          <input type="time" id="cal-morning">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Evening brief</label>
+          <input type="time" id="cal-evening">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Reminder (min before event)</label>
+          <input type="number" id="cal-remind" min="5" max="1440" step="5">
+        </div>
+      </div>
+      <button class="btn-submit" onclick="saveSection('calendar')">Save</button>
+      <div id="cal-status" class="settings-status"></div>
+    </div>
+
+    <!-- TVs -->
+    <div class="card">
+      <div class="card-title">&#128250; TVs</div>
+      <div id="tvs-list" class="array-list"></div>
+      <div class="input-row" style="margin-top:.5rem">
+        <input type="text" id="tv-name-new" placeholder="Name (e.g. Living Room TV)" style="flex:1">
+        <input type="text" id="tv-ip-new" placeholder="IP address" style="flex:1">
+        <button class="btn-submit" onclick="addTv()">Add</button>
+      </div>
+      <div id="tvs-status" class="settings-status"></div>
+    </div>
+
+    <!-- Network Devices -->
+    <div class="card">
+      <div class="card-title">&#128225; Network Devices</div>
+      <div id="devs-list" class="array-list"></div>
+      <div class="input-row" style="margin-top:.5rem">
+        <input type="text" id="dev-name-new" placeholder="Name (e.g. Router)" style="flex:1">
+        <input type="text" id="dev-ip-new" placeholder="IP address" style="flex:1">
+        <button class="btn-submit" onclick="addDev()">Add</button>
+      </div>
+      <div id="devs-status" class="settings-status"></div>
+    </div>
+
+    <!-- News Feeds -->
+    <div class="card">
+      <div class="card-title">&#128240; News Feeds</div>
+      <div class="field-group">
+        <label class="field-label">Articles per feed</label>
+        <input type="number" id="news-per-feed" min="1" max="20" style="width:5rem">
+      </div>
+      <div id="feeds-list" class="array-list"></div>
+      <div class="input-row" style="margin-top:.5rem">
+        <input type="text" id="feed-name-new" placeholder="Source name" style="flex:1">
+        <input type="text" id="feed-url-new" placeholder="RSS feed URL" style="flex:2">
+        <button class="btn-submit" onclick="addFeed()">Add</button>
+      </div>
+      <button class="btn-submit" style="margin-top:.5rem" onclick="saveSection('news')">Save</button>
+      <div id="news-status" class="settings-status"></div>
+    </div>
+
+    <!-- Photo -->
+    <div class="card">
+      <div class="card-title">&#128247; Photo of the Day</div>
+      <div class="fields-inline">
+        <div class="field-group">
+          <label class="field-label">Source</label>
+          <select id="photo-source" onchange="toggleNasaKey()">
+            <option value="picsum">Random (Picsum Photos)</option>
+            <option value="nasa_apod">NASA Astronomy Picture of the Day</option>
+          </select>
+        </div>
+        <div class="field-group" id="nasa-key-group" style="display:none">
+          <label class="field-label">NASA API Key</label>
+          <input type="text" id="photo-nasa-key" placeholder="Get free key at api.nasa.gov">
+        </div>
+      </div>
+      <button class="btn-submit" onclick="saveSection('photo')">Save</button>
+      <div id="photo-status" class="settings-status"></div>
+    </div>
+
+  </main>
+  <script src="/static/settings.js"></script>
+</body>
+</html>
