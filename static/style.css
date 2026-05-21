@@ -107,6 +107,7 @@ header {
     "photo    photo"
     "todo     grocery"
     "notes    notes"
+    "vehicles vehicles"
     "storage  storage"
     "devices  devices"
     "cal      cal"
@@ -131,6 +132,7 @@ header {
       "todo"
       "grocery"
       "notes"
+      "vehicles"
       "storage"
       "devices"
       "cal"
@@ -150,6 +152,7 @@ header {
 .notes-card    { grid-area: notes; }
 .devices-card  { grid-area: devices; }
 .cal-card      { grid-area: cal; }
+.vehicles-card { grid-area: vehicles; }
 .storage-card  { grid-area: storage; }
 .news-card     { grid-area: news; }
 
@@ -980,3 +983,75 @@ select option { background: var(--card-bg); }
 .storage-search-loc:hover { text-decoration: underline; }
 .storage-search-notes { color: var(--muted); font-size: 0.78rem; width: 100%; padding-left: 1rem; }
 .storage-no-results { color: var(--muted); font-size: 0.85rem; padding: 0.3rem 0; }
+
+/* ── Vehicles / Oil Changes ──────────────── */
+.vehicle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.vehicle-row:last-child { border-bottom: none; }
+
+.vehicle-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.vehicle-status {
+  font-size: 0.78rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.vehicle-status.ok     { color: var(--success); }
+.vehicle-status.warn   { color: var(--warning); }
+.vehicle-status.overdue{ color: var(--danger); }
+.vehicle-status.none   { color: var(--muted); }
+
+.btn-log-change {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--muted);
+  padding: 0.25rem 0.55rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.btn-log-change:hover { color: var(--success); border-color: var(--success); }
+
+/* Vehicles page */
+.vehicle-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.6rem;
+}
+
+.vehicle-card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.vehicle-big-status {
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.oil-history-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 0.85rem;
+}
+.oil-history-item:last-child { border-bottom: none; }
+.oil-history-date { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 6rem; }
+.oil-history-notes { color: var(--muted); flex: 1; }

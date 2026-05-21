@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oil Changes — Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-title">&#128663; Oil Changes</div>
+    <a href="/" class="btn-back">&#8592; Dashboard</a>
+  </header>
+
+  <main class="settings-main" style="max-width:800px">
+
+    <div id="vehicles-container"></div>
+
+    <!-- Add vehicle -->
+    <div class="card">
+      <div class="card-title">&#43; Add Vehicle</div>
+      <div class="input-row" style="margin-bottom:0">
+        <input type="text" id="new-vehicle-name" placeholder="Vehicle name (e.g. 2018 Honda CR-V)&hellip;" maxlength="100" autocomplete="off" onkeydown="if(event.key==='Enter')addVehicle()">
+        <button class="btn-submit" onclick="addVehicle()">Add</button>
+      </div>
+      <div id="new-vehicle-status" class="settings-status"></div>
+    </div>
+
+  </main>
+  <script src="/static/vehicles.js"></script>
+</body>
+</html>

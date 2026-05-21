@@ -111,6 +111,22 @@ def init_db():
             created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vehicles (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS oil_changes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            vehicle_id INTEGER NOT NULL,
+            changed_at TEXT    NOT NULL,
+            notes      TEXT    NOT NULL DEFAULT '',
+            created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+        )
+    """)
 
     conn.commit()
     conn.close()
@@ -356,6 +372,40 @@ def _send_event_reminders():
     conn.close()
 
 
+def _check_oil_reminders():
+    """Fire once per day when any vehicle is >= 180 days since last oil change."""
+    conn = get_db()
+    vehicles = conn.execute("SELECT * FROM vehicles").fetchall()
+    for v in vehicles:
+        last = conn.execute(
+            "SELECT changed_at FROM oil_changes WHERE vehicle_id = ? ORDER BY changed_at DESC LIMIT 1",
+            (v["id"],),
+        ).fetchone()
+        if not last:
+            continue
+        try:
+            days = (datetime.now() - datetime.strptime(last["changed_at"], "%Y-%m-%d")).days
+            if days >= 180:
+                already = conn.execute(
+                    "SELECT 1 FROM briefs_sent WHERE date = ? AND type = ?",
+                    (datetime.now().strftime("%Y-%m-%d"), f"oil_{v['id']}"),
+                ).fetchone()
+                if not already:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO briefs_sent (date, type) VALUES (?,?)",
+                        (datetime.now().strftime("%Y-%m-%d"), f"oil_{v['id']}"),
+                    )
+                    conn.commit()
+                    notify(
+                        f"🛢 Oil Change Due: {v['name']}",
+                        f"{v['name']} is {days} days since last oil change.",
+                        tags=["car", "warning"],
+                    )
+        except Exception:
+            pass
+    conn.close()
+
+
 def _calendar_scheduler():
     sent = {}
     while True:
@@ -376,6 +426,7 @@ def _calendar_scheduler():
                 _send_evening_brief()
 
             _send_event_reminders()
+            _check_oil_reminders()
 
             for d in [k for k in sent if k < today]:
                 del sent[d]
@@ -1073,6 +1124,100 @@ def add_storage_item():
 def delete_storage_item(item_id):
     conn = get_db()
     conn.execute("DELETE FROM storage_items WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+
+# ── Vehicles / Oil Changes ─────────────────────────────────────────────────────
+
+@app.route("/vehicles")
+def vehicles_page():
+    return render_template("vehicles.html")
+
+
+@app.route("/api/vehicles")
+def get_vehicles():
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM vehicles ORDER BY name").fetchall()
+    result = []
+    for v in rows:
+        last = conn.execute(
+            "SELECT * FROM oil_changes WHERE vehicle_id = ? ORDER BY changed_at DESC LIMIT 1",
+            (v["id"],),
+        ).fetchone()
+        history = conn.execute(
+            "SELECT * FROM oil_changes WHERE vehicle_id = ? ORDER BY changed_at DESC LIMIT 10",
+            (v["id"],),
+        ).fetchall()
+        days = None
+        if last:
+            try:
+                days = (datetime.now() - datetime.strptime(last["changed_at"], "%Y-%m-%d")).days
+            except Exception:
+                pass
+        result.append({
+            **dict(v),
+            "last_change": dict(last) if last else None,
+            "days_since": days,
+            "history": [dict(h) for h in history],
+        })
+    conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/vehicles", methods=["POST"])
+def add_vehicle():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name required"}), 400
+    conn = get_db()
+    cur = conn.execute("INSERT INTO vehicles (name) VALUES (?)", (name[:100],))
+    conn.commit()
+    row = conn.execute("SELECT * FROM vehicles WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/vehicles/<int:vehicle_id>", methods=["DELETE"])
+def delete_vehicle(vehicle_id):
+    conn = get_db()
+    conn.execute("DELETE FROM oil_changes WHERE vehicle_id = ?", (vehicle_id,))
+    conn.execute("DELETE FROM vehicles WHERE id = ?", (vehicle_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+
+@app.route("/api/vehicles/<int:vehicle_id>/oil-change", methods=["POST"])
+def log_oil_change(vehicle_id):
+    data = request.get_json(silent=True) or {}
+    changed_at = (data.get("changed_at") or datetime.now().strftime("%Y-%m-%d")).strip()
+    notes = (data.get("notes") or "").strip()
+    conn = get_db()
+    v = conn.execute("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,)).fetchone()
+    if not v:
+        conn.close()
+        return jsonify({"error": "Vehicle not found"}), 404
+    cur = conn.execute(
+        "INSERT INTO oil_changes (vehicle_id, changed_at, notes) VALUES (?,?,?)",
+        (vehicle_id, changed_at, notes[:300]),
+    )
+    # Clear any existing 6-month reminder flag for today so it re-evaluates
+    conn.execute(
+        "DELETE FROM briefs_sent WHERE type = ?", (f"oil_{vehicle_id}",)
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM oil_changes WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/oil-changes/<int:change_id>", methods=["DELETE"])
+def delete_oil_change(change_id):
+    conn = get_db()
+    conn.execute("DELETE FROM oil_changes WHERE id = ?", (change_id,))
     conn.commit()
     conn.close()
     return "", 204

@@ -406,6 +406,48 @@ async function deleteNote(id) {
   fetchNotes();
 }
 
+// ── Vehicles / Oil Changes (dashboard card) ───────────────────────────────────
+async function fetchVehicles() {
+  const el = document.getElementById("vehicles-content");
+  if (!el) return;
+  try {
+    const vehicles = await (await fetch("/api/vehicles")).json();
+    if (!vehicles.length) {
+      el.innerHTML = '<p class="muted" style="font-size:.85rem">No vehicles yet. <a href="/vehicles" style="color:var(--accent)">Add one</a>.</p>';
+      return;
+    }
+    el.innerHTML = vehicles.map(v => {
+      let statusTxt, statusCls;
+      if (v.days_since === null) {
+        statusTxt = "No record"; statusCls = "none";
+      } else if (v.days_since < 120) {
+        statusTxt = `${v.days_since}d ago`; statusCls = "ok";
+      } else if (v.days_since < 180) {
+        statusTxt = `${v.days_since}d ago — coming up`; statusCls = "warn";
+      } else {
+        statusTxt = `${v.days_since}d ago — OVERDUE`; statusCls = "overdue";
+      }
+      return `
+        <div class="vehicle-row">
+          <span class="vehicle-name">${escapeHtml(v.name)}</span>
+          <span class="vehicle-status ${statusCls}">${statusTxt}</span>
+          <button class="btn-log-change" onclick="logOilChange(${v.id})">&#128197; Log</button>
+        </div>`;
+    }).join("");
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load vehicles</p>';
+  }
+}
+
+async function logOilChange(vehicleId) {
+  const res = await fetch(`/api/vehicles/${vehicleId}/oil-change`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ changed_at: new Date().toISOString().slice(0, 10) }),
+  }).catch(() => null);
+  if (res && res.ok) fetchVehicles();
+}
+
 // ── Storage search (dashboard card) ──────────────────────────────────────────
 let _storageSearchTimer = null;
 function searchStorage(query) {
@@ -453,6 +495,7 @@ async function turnOffTV(index, btn) {
 // ── Init & refresh ────────────────────────────────────────────────────────────
 function loadAll() {
   fetchWeather();
+  fetchVehicles();
   fetchNews();
   fetchDevices();
   fetchPihole();
@@ -539,6 +582,7 @@ setInterval(fetchGroceries,15_000);
 setInterval(fetchNotes,    15_000);
 setInterval(fetchDevices,  30_000);
 setInterval(fetchPihole,   60_000);
+setInterval(fetchVehicles, 5 * 60_000);
 setInterval(fetchWeather,  10 * 60_000);
 setInterval(fetchCalendar,      60_000);
 setInterval(fetchNews,     30 * 60_000);
