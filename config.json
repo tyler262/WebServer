@@ -66,6 +66,9 @@
     "source": "picsum",
     "nasa_api_key": ""
   },
+  "stocks": {
+    "symbols": ["SPY", "QQQ", "AAPL", "TSLA"]
+  },
   "news": {
     "feeds": [
       {

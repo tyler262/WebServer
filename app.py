@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, render_template, request, send_from_directory
 import json
+import math
 import os
 import random
 import smtplib
@@ -14,6 +15,12 @@ from email.mime.text import MIMEText
 import feedparser
 import psutil
 import requests
+
+try:
+    import yfinance as yf
+    _YF_AVAILABLE = True
+except ImportError:
+    _YF_AVAILABLE = False
 
 app = Flask(__name__)
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -438,6 +445,38 @@ def _calendar_scheduler():
 threading.Thread(target=_calendar_scheduler, daemon=True).start()
 
 
+# ── Moon phase ─────────────────────────────────────────────────────────────────
+
+def _get_moon_phase():
+    """Calculate current moon phase using known reference new moon."""
+    ref = datetime(2000, 1, 6, 18, 14, 0)   # known new moon
+    cycle = 29.530588853
+    days  = (datetime.utcnow() - ref).total_seconds() / 86400.0
+    pos   = days % cycle                     # days into current cycle
+    frac  = pos / cycle                      # 0.0 (new) → 0.5 (full) → 1.0 (new)
+    illum = round(50 * (1 - math.cos(2 * math.pi * frac)))
+    days_to_full = ((cycle / 2) - pos) % cycle
+
+    if   frac < 0.0625 or frac >= 0.9375: name, emoji = "New Moon",        "🌑"
+    elif frac < 0.1875:                    name, emoji = "Waxing Crescent",  "🌒"
+    elif frac < 0.3125:                    name, emoji = "First Quarter",    "🌓"
+    elif frac < 0.4375:                    name, emoji = "Waxing Gibbous",   "🌔"
+    elif frac < 0.5625:                    name, emoji = "Full Moon",        "🌕"
+    elif frac < 0.6875:                    name, emoji = "Waning Gibbous",   "🌖"
+    elif frac < 0.8125:                    name, emoji = "Last Quarter",     "🌗"
+    else:                                  name, emoji = "Waning Crescent",  "🌘"
+
+    return {
+        "phase":         name,
+        "emoji":         emoji,
+        "illumination":  illum,
+        "days_into_cycle": round(pos, 1),
+        "days_to_full":  round(days_to_full, 1),
+        "next_full_in":  (f"in {round(days_to_full)} day{'s' if round(days_to_full) != 1 else ''}"
+                          if days_to_full > 0.5 else "tonight"),
+    }
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -495,29 +534,179 @@ def geocode():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/moon")
+def moon():
+    cached = get_cache("moon", ttl=3600)
+    if cached:
+        return jsonify(cached)
+    data = _get_moon_phase()
+    set_cache("moon", data)
+    return jsonify(data)
+
+
+@app.route("/api/stocks")
+def stocks():
+    if not _YF_AVAILABLE:
+        return jsonify({"error": "yfinance not installed — run: pip install yfinance"}), 503
+    config  = load_config()
+    symbols = config.get("stocks", {}).get("symbols", [])
+    if not symbols:
+        return jsonify([])
+    cached = get_cache("stocks", ttl=300)
+    if cached:
+        return jsonify(cached)
+    results = []
+    for sym in symbols:
+        try:
+            fi  = yf.Ticker(sym).fast_info
+            price = round(float(fi.last_price), 2)
+            prev  = round(float(fi.previous_close), 2)
+            chg   = round(price - prev, 2)
+            chg_p = round(chg / prev * 100, 2) if prev else 0
+            results.append({
+                "symbol":   sym.upper(),
+                "price":    price,
+                "change":   chg,
+                "change_pct": chg_p,
+                "prev_close": prev,
+            })
+        except Exception as e:
+            results.append({"symbol": sym.upper(), "error": str(e)})
+    set_cache("stocks", results)
+    return jsonify(results)
+
+
+_SNOW_CODES  = {71, 73, 75, 77, 85, 86}
+_RAIN_CODES  = {51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82}
+_STORM_CODES = {95, 96, 99}
+
+
+def _generate_weather_summary(forecast, units):
+    """Generate a human-readable 1-2 sentence weather summary for tomorrow."""
+    if len(forecast) < 2:
+        return ""
+    today = forecast[0]
+    tmr   = forecast[1]
+    diff  = tmr["high"] - today["high"]
+    adiff = abs(diff)
+
+    # Temperature base
+    if adiff <= 2:
+        base = "Same as today"
+    elif adiff <= 5:
+        base = f"A bit {'warmer' if diff > 0 else 'cooler'} tomorrow"
+    elif adiff <= 10:
+        base = f"{'Warmer' if diff > 0 else 'Cooler'} tomorrow (+{adiff}°)" if diff > 0 else f"Cooler tomorrow ({diff}°)"
+    else:
+        base = f"Much {'warmer' if diff > 0 else 'cooler'} tomorrow ({'+' if diff>0 else ''}{diff}°)"
+
+    # Weather modifier
+    code = tmr["code"]
+    rain = tmr["precip_pct"] or 0
+    if code in _STORM_CODES:
+        wx = "thunderstorms"
+    elif code in _SNOW_CODES and rain >= 40:
+        wx = "snow expected"
+    elif code in _RAIN_CODES or rain >= 70:
+        wx = "rainy"
+    elif rain >= 45:
+        wx = "chance of rain"
+    else:
+        wx = ""
+
+    # Wind modifier
+    t_wind = tmr["wind_max"] or 0
+    d_wind = today["wind_max"] or 0
+    if t_wind > 25:
+        wind = "quite windy"
+    elif t_wind > 15 and t_wind > d_wind * 1.5:
+        wind = "windier"
+    elif t_wind < 8 and d_wind > 15:
+        wind = "calm winds"
+    else:
+        wind = ""
+
+    mods = [m for m in [wx, wind] if m]
+    if mods:
+        connector = " — " if adiff <= 2 else ", "
+        base = base + connector + ", ".join(mods)
+
+    # Advice
+    tips = []
+    hi = tmr["high"]
+    is_f = (units == "fahrenheit")
+    if wx in ("rainy", "thunderstorms", "chance of rain"):
+        tips.append("bring an umbrella")
+    if code in _SNOW_CODES and rain >= 40:
+        tips.append("snow gear")
+    if is_f:
+        if   hi >= 90: tips.append("hot one — stay hydrated")
+        elif hi >= 83: tips.append("sunscreen weather")
+        elif hi <= 32: tips.append("below freezing — bundle up")
+        elif hi <= 44: tips.append("heavy coat")
+        elif hi <= 54: tips.append("jacket recommended")
+    else:
+        if   hi >= 32: tips.append("hot one — stay hydrated")
+        elif hi >= 28: tips.append("sunscreen weather")
+        elif hi <= 0:  tips.append("below freezing — bundle up")
+        elif hi <= 7:  tips.append("heavy coat")
+        elif hi <= 13: tips.append("jacket recommended")
+
+    result = base + "."
+    if tips:
+        result += " " + "; ".join(t[0].upper() + t[1:] for t in tips) + "."
+    return result
+
+
 def _fetch_weather_for(lat, lon, units="fahrenheit"):
     r = requests.get(
         "https://api.open-meteo.com/v1/forecast",
         params={
             "latitude": lat, "longitude": lon,
             "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m",
+            "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,wind_speed_10m_max",
             "temperature_unit": units,
             "wind_speed_unit": "mph",
             "timezone": "auto",
+            "forecast_days": 6,
         },
         timeout=10,
     )
     r.raise_for_status()
-    d = r.json()["current"]
+    data    = r.json()
+    cur     = data["current"]
+    daily   = data["daily"]
     unit_sym = "°F" if units == "fahrenheit" else "°C"
+
+    # Build daily forecast list (today + 5 more days)
+    forecast = []
+    for i, date_str in enumerate(daily["time"]):
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+        if i == 0:   label = "Today"
+        elif i == 1: label = "Tmr"
+        else:        label = d.strftime("%a")
+        forecast.append({
+            "date":      date_str,
+            "label":     label,
+            "high":      round(daily["temperature_2m_max"][i]),
+            "low":       round(daily["temperature_2m_min"][i]),
+            "code":      daily["weather_code"][i],
+            "icon":      wmo_icon(daily["weather_code"][i]),
+            "desc":      WMO_DESCRIPTIONS.get(daily["weather_code"][i], ""),
+            "precip_pct": daily["precipitation_probability_max"][i] or 0,
+            "wind_max":  round(daily["wind_speed_10m_max"][i]),
+        })
+
     return {
-        "temp": round(d["temperature_2m"]),
-        "feels_like": round(d["apparent_temperature"]),
-        "humidity": d["relative_humidity_2m"],
-        "wind": round(d["wind_speed_10m"]),
-        "description": WMO_DESCRIPTIONS.get(d["weather_code"], "Unknown"),
-        "icon": wmo_icon(d["weather_code"]),
-        "unit": unit_sym,
+        "temp":        round(cur["temperature_2m"]),
+        "feels_like":  round(cur["apparent_temperature"]),
+        "humidity":    cur["relative_humidity_2m"],
+        "wind":        round(cur["wind_speed_10m"]),
+        "description": WMO_DESCRIPTIONS.get(cur["weather_code"], "Unknown"),
+        "icon":        wmo_icon(cur["weather_code"]),
+        "unit":        unit_sym,
+        "forecast":    forecast,
+        "summary":     _generate_weather_summary(forecast, units),
     }
 
 
