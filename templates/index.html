@@ -137,6 +137,20 @@
       <div id="cal-list"></div>
     </div>
 
+    <!-- Storage -->
+    <div class="card storage-card" id="storage-card">
+      <div class="card-title-row">
+        <span class="card-title">&#128230; Storage</span>
+        <a href="/storage" class="btn-new">Manage &#8594;</a>
+      </div>
+      <form id="storage-search-form" onsubmit="return false">
+        <div class="input-row">
+          <input id="storage-search-input" type="text" placeholder="Search for an item&hellip;" maxlength="200" autocomplete="off" oninput="searchStorage(this.value)">
+        </div>
+      </form>
+      <div id="storage-search-results"></div>
+    </div>
+
     <!-- Network Devices -->
     <div class="card devices-card" id="devices-card">
       <div class="card-title">&#128225; Network Devices</div>

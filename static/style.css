@@ -107,6 +107,7 @@ header {
     "photo    photo"
     "todo     grocery"
     "notes    notes"
+    "storage  storage"
     "devices  devices"
     "cal      cal"
     "news     news";
@@ -130,6 +131,7 @@ header {
       "todo"
       "grocery"
       "notes"
+      "storage"
       "devices"
       "cal"
       "news";
@@ -148,6 +150,7 @@ header {
 .notes-card    { grid-area: notes; }
 .devices-card  { grid-area: devices; }
 .cal-card      { grid-area: cal; }
+.storage-card  { grid-area: storage; }
 .news-card     { grid-area: news; }
 
 /* ── Weather multi-city ─────────────────── */
@@ -881,3 +884,99 @@ select option { background: var(--card-bg); }
   transition: color 0.15s;
 }
 .btn-city-settings:hover { color: var(--accent); }
+
+/* ── Storage search results (dashboard card) ─ */
+.storage-result {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 0.88rem;
+}
+.storage-result:last-child { border-bottom: none; }
+.storage-result-name { font-weight: 500; flex: 1; min-width: 0; }
+.storage-result-loc  { color: var(--accent); font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; }
+.storage-result-notes { color: var(--muted); font-size: 0.78rem; }
+.storage-no-results  { color: var(--muted); font-size: 0.85rem; padding: 0.4rem 0; }
+
+/* ── Storage page ────────────────────────── */
+.storage-loc-card { margin-bottom: 0; }
+
+.storage-loc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.storage-loc-name {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.storage-loc-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: 0.5rem;
+}
+
+.storage-loc-header .btn-del {
+  font-size: 0.75rem;
+  color: var(--muted);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+}
+.storage-loc-header .btn-del:hover { color: var(--danger); border-color: var(--danger); }
+
+.storage-items-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--card-border);
+  padding-top: 0.5rem;
+}
+
+.storage-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.storage-item:last-child { border-bottom: none; }
+
+.storage-item-body { flex: 1; min-width: 0; }
+
+.storage-item-name {
+  font-size: 0.9rem;
+  display: block;
+}
+
+.storage-item-notes {
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: block;
+  margin-top: 0.1rem;
+}
+
+/* Search results on storage page */
+.storage-search-list { display: flex; flex-direction: column; gap: 0.1rem; }
+
+.storage-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--card-border);
+  flex-wrap: wrap;
+  font-size: 0.88rem;
+}
+.storage-search-row:last-child { border-bottom: none; }
+
+.storage-search-item { font-weight: 500; }
+.storage-search-arrow { color: var(--muted); }
+.storage-search-loc { color: var(--accent); text-decoration: none; }
+.storage-search-loc:hover { text-decoration: underline; }
+.storage-search-notes { color: var(--muted); font-size: 0.78rem; width: 100%; padding-left: 1rem; }
+.storage-no-results { color: var(--muted); font-size: 0.85rem; padding: 0.3rem 0; }

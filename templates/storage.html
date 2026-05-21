@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storage — Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-title">&#128230; Storage</div>
+    <a href="/" class="btn-back">&#8592; Dashboard</a>
+  </header>
+
+  <main class="settings-main" style="max-width:900px">
+
+    <!-- Search -->
+    <div class="card">
+      <div class="card-title">&#128269; Find an Item</div>
+      <div class="input-row" style="margin-bottom:0">
+        <input type="text" id="page-search-input" placeholder="Search items across all locations&hellip;" maxlength="200" autocomplete="off" oninput="pageSearch(this.value)">
+      </div>
+      <div id="page-search-results" style="margin-top:.5rem"></div>
+    </div>
+
+    <!-- Locations -->
+    <div id="locations-container"></div>
+
+    <!-- Add location -->
+    <div class="card">
+      <div class="card-title">&#43; New Location</div>
+      <div class="input-stack" style="margin-bottom:0">
+        <div class="input-row" style="margin-bottom:0">
+          <input type="text" id="new-loc-name" placeholder="Location name (e.g. Above Garage, Hall Closet)&hellip;" maxlength="200" autocomplete="off" onkeydown="if(event.key==='Enter')addLocation()">
+          <button class="btn-submit" onclick="addLocation()">Add Location</button>
+        </div>
+      </div>
+      <div id="new-loc-status" class="settings-status"></div>
+    </div>
+
+  </main>
+  <script src="/static/storage.js"></script>
+</body>
+</html>

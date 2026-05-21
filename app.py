@@ -94,6 +94,23 @@ def init_db():
             PRIMARY KEY (date, type)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS storage_locations (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT    NOT NULL,
+            notes         TEXT    NOT NULL DEFAULT '',
+            display_order INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS storage_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            location_id INTEGER NOT NULL,
+            name        TEXT    NOT NULL,
+            notes       TEXT    NOT NULL DEFAULT '',
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
 
     conn.commit()
     conn.close()
@@ -957,6 +974,105 @@ def add_event():
 def delete_event(event_id):
     conn = get_db()
     conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+
+# ── Storage Inventory ──────────────────────────────────────────────────────────
+
+@app.route("/storage")
+def storage_page():
+    return render_template("storage.html")
+
+
+@app.route("/api/storage")
+def get_storage():
+    conn = get_db()
+    locs = conn.execute("SELECT * FROM storage_locations ORDER BY display_order, id").fetchall()
+    result = []
+    for loc in locs:
+        items = conn.execute(
+            "SELECT * FROM storage_items WHERE location_id = ? ORDER BY name",
+            (loc["id"],),
+        ).fetchall()
+        result.append({**dict(loc), "items": [dict(i) for i in items]})
+    conn.close()
+    return jsonify(result)
+
+
+@app.route("/api/storage/search")
+def search_storage():
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify([])
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT si.id, si.name, si.notes, sl.name AS location_name, sl.id AS location_id
+           FROM storage_items si
+           JOIN storage_locations sl ON sl.id = si.location_id
+           WHERE si.name LIKE ? OR si.notes LIKE ?
+           ORDER BY si.name""",
+        (f"%{q}%", f"%{q}%"),
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/storage/locations", methods=["POST"])
+def add_storage_location():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name required"}), 400
+    notes = (data.get("notes") or "").strip()
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO storage_locations (name, notes) VALUES (?,?)", (name[:200], notes[:500])
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM storage_locations WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/storage/locations/<int:loc_id>", methods=["DELETE"])
+def delete_storage_location(loc_id):
+    conn = get_db()
+    conn.execute("DELETE FROM storage_items WHERE location_id = ?", (loc_id,))
+    conn.execute("DELETE FROM storage_locations WHERE id = ?", (loc_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+
+@app.route("/api/storage/items", methods=["POST"])
+def add_storage_item():
+    data = request.get_json(silent=True) or {}
+    location_id = data.get("location_id")
+    name = (data.get("name") or "").strip()
+    if not location_id or not name:
+        return jsonify({"error": "location_id and name required"}), 400
+    notes = (data.get("notes") or "").strip()
+    conn = get_db()
+    loc = conn.execute("SELECT id FROM storage_locations WHERE id = ?", (location_id,)).fetchone()
+    if not loc:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    cur = conn.execute(
+        "INSERT INTO storage_items (location_id, name, notes) VALUES (?,?,?)",
+        (location_id, name[:300], notes[:500]),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM storage_items WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/storage/items/<int:item_id>", methods=["DELETE"])
+def delete_storage_item(item_id):
+    conn = get_db()
+    conn.execute("DELETE FROM storage_items WHERE id = ?", (item_id,))
     conn.commit()
     conn.close()
     return "", 204

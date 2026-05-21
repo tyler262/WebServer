@@ -406,6 +406,31 @@ async function deleteNote(id) {
   fetchNotes();
 }
 
+// ── Storage search (dashboard card) ──────────────────────────────────────────
+let _storageSearchTimer = null;
+function searchStorage(query) {
+  const el = document.getElementById("storage-search-results");
+  clearTimeout(_storageSearchTimer);
+  if (!query.trim()) { el.innerHTML = ""; return; }
+  _storageSearchTimer = setTimeout(async () => {
+    try {
+      const results = await (await fetch(`/api/storage/search?q=${encodeURIComponent(query)}`)).json();
+      if (!results.length) {
+        el.innerHTML = '<div class="storage-no-results">No items found.</div>';
+        return;
+      }
+      el.innerHTML = results.map(r => `
+        <div class="storage-result">
+          <span class="storage-result-name">${escapeHtml(r.name)}</span>
+          <span class="storage-result-loc">&#8594; ${escapeHtml(r.location_name)}</span>
+          ${r.notes ? `<div class="storage-result-notes" style="width:100%;padding-left:0">${escapeHtml(r.notes)}</div>` : ""}
+        </div>`).join("");
+    } catch {
+      el.innerHTML = '<div class="storage-no-results error">Search failed.</div>';
+    }
+  }, 250);
+}
+
 // ── TV Control ────────────────────────────────────────────────────────────────
 async function turnOffTV(index, btn) {
   const name = btn.dataset.tv || `TV ${index + 1}`;
