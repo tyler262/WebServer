@@ -52,6 +52,21 @@ async function fetchWeather() {
           </div>
           <div class="weather-city-details error">${escapeHtml(d.error)}</div>
         </div>`;
+
+      const forecastHtml = d.forecast && d.forecast.length
+        ? `<div class="forecast-strip">${d.forecast.map(f => `
+            <div class="forecast-day">
+              <div class="forecast-day-label">${escapeHtml(f.label)}</div>
+              <div class="forecast-day-icon">${f.icon}</div>
+              <div class="forecast-day-high">${f.high}°</div>
+              <div class="forecast-day-low">${f.low}°</div>
+              ${f.precip_pct > 20 ? `<div class="forecast-day-precip">&#128167;${f.precip_pct}%</div>` : ""}
+            </div>`).join("")}</div>`
+        : "";
+
+      const summaryHtml = d.summary
+        ? `<div class="weather-summary">${escapeHtml(d.summary)}</div>` : "";
+
       return `
         <div class="weather-city">
           <div class="weather-city-header">
@@ -64,10 +79,61 @@ async function fetchWeather() {
             Feels ${d.feels_like}${d.unit} &nbsp;·&nbsp;
             &#128167; ${d.humidity}% &nbsp;·&nbsp; &#128168; ${d.wind} mph
           </div>
+          ${forecastHtml}
+          ${summaryHtml}
         </div>`;
     }).join("");
   } catch {
     el.innerHTML = '<p class="error">Failed to load weather</p>';
+  }
+}
+
+// ── Stocks ────────────────────────────────────────────────────────────────────
+async function fetchStocks() {
+  const el = document.getElementById("stocks-content");
+  if (!el) return;
+  try {
+    const data = await (await fetch("/api/stocks")).json();
+    if (data.error) { el.innerHTML = `<p class="error">${escapeHtml(data.error)}</p>`; return; }
+    if (!data.length) { el.innerHTML = '<p class="muted">No symbols configured.</p>'; return; }
+    el.innerHTML = data.map(s => {
+      if (s.error) return `
+        <div class="stock-row">
+          <span class="stock-symbol">${escapeHtml(s.symbol)}</span>
+          <span class="stock-price muted">—</span>
+          <span class="stock-change">${escapeHtml(s.error)}</span>
+        </div>`;
+      const dir = s.change >= 0 ? "up" : "down";
+      const arrow = s.change >= 0 ? "&#9650;" : "&#9660;";
+      const chSign = s.change >= 0 ? "+" : "";
+      const pctSign = s.change_pct >= 0 ? "+" : "";
+      return `
+        <div class="stock-row">
+          <span class="stock-symbol">${escapeHtml(s.symbol)}</span>
+          <span class="stock-price">$${s.price.toFixed(2)}</span>
+          <span class="stock-change ${dir}">${arrow} ${chSign}${s.change.toFixed(2)} (${pctSign}${s.change_pct.toFixed(2)}%)</span>
+        </div>`;
+    }).join("");
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load stocks</p>';
+  }
+}
+
+// ── Moon Phase ────────────────────────────────────────────────────────────────
+async function fetchMoon() {
+  const el = document.getElementById("moon-content");
+  if (!el) return;
+  try {
+    const d = await (await fetch("/api/moon")).json();
+    el.innerHTML = `
+      <div class="moon-display">
+        <div class="moon-emoji">${d.emoji}</div>
+        <div class="moon-phase-name">${escapeHtml(d.phase)}</div>
+        <div class="moon-illum">${d.illumination}% illuminated</div>
+        <div class="moon-next-full">${escapeHtml(d.next_full_in)}</div>
+      </div>`;
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load moon phase</p>';
   }
 }
 
@@ -495,6 +561,8 @@ async function turnOffTV(index, btn) {
 // ── Init & refresh ────────────────────────────────────────────────────────────
 function loadAll() {
   fetchWeather();
+  fetchStocks();
+  fetchMoon();
   fetchVehicles();
   fetchNews();
   fetchDevices();
@@ -583,6 +651,8 @@ setInterval(fetchNotes,    15_000);
 setInterval(fetchDevices,  30_000);
 setInterval(fetchPihole,   60_000);
 setInterval(fetchVehicles, 5 * 60_000);
+setInterval(fetchStocks,   5 * 60_000);
 setInterval(fetchWeather,  10 * 60_000);
+setInterval(fetchMoon,     60 * 60_000);
 setInterval(fetchCalendar,      60_000);
 setInterval(fetchNews,     30 * 60_000);
