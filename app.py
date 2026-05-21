@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 
 import feedparser
@@ -65,6 +66,48 @@ def init_db():
             created_at TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS weather_cities (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT    NOT NULL,
+            latitude      REAL    NOT NULL,
+            longitude     REAL    NOT NULL,
+            display_order INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            title          TEXT NOT NULL,
+            date           TEXT NOT NULL,
+            time           TEXT,
+            end_time       TEXT,
+            notes          TEXT NOT NULL DEFAULT '',
+            created_at     TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            reminder_sent  INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS briefs_sent (
+            date TEXT NOT NULL,
+            type TEXT NOT NULL,
+            PRIMARY KEY (date, type)
+        )
+    """)
+
+    # Seed weather_cities from config on first run
+    if conn.execute("SELECT COUNT(*) FROM weather_cities").fetchone()[0] == 0:
+        try:
+            cfg = json.load(open(CONFIG_FILE))
+            w = cfg.get("weather", {})
+            if w.get("city") and w.get("city") != "Your City":
+                conn.execute(
+                    "INSERT INTO weather_cities (name, latitude, longitude) VALUES (?,?,?)",
+                    (w["city"], w["latitude"], w["longitude"]),
+                )
+        except Exception:
+            pass
+
     conn.commit()
     conn.close()
 
@@ -247,6 +290,99 @@ def get_uptime():
         return "unknown"
 
 
+# ── Calendar notifications & scheduler ────────────────────────────────────────
+
+def _fmt_event_time(e):
+    return f" at {e['time']}" if e['time'] else " (all day)"
+
+
+def _send_morning_brief():
+    today = datetime.now().strftime("%Y-%m-%d")
+    conn = get_db()
+    evs = conn.execute(
+        "SELECT * FROM events WHERE date = ? ORDER BY time ASC NULLS LAST", (today,)
+    ).fetchall()
+    conn.close()
+    if not evs:
+        return
+    lines = ["Good morning! Today:"] + [f"• {e['title']}{_fmt_event_time(e)}" for e in evs]
+    notify("📅 Morning Brief", "\n".join(lines), tags=["calendar"])
+
+
+def _send_evening_brief():
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    conn = get_db()
+    evs = conn.execute(
+        "SELECT * FROM events WHERE date = ? ORDER BY time ASC NULLS LAST", (tomorrow,)
+    ).fetchall()
+    conn.close()
+    if not evs:
+        return
+    lines = ["Tomorrow's events:"]
+    for e in evs:
+        flag = ""
+        if e['time']:
+            try:
+                if int(e['time'].split(":")[0]) < 9:
+                    flag = " ⚠️ early"
+            except Exception:
+                pass
+        lines.append(f"• {e['title']}{_fmt_event_time(e)}{flag}")
+    notify("📅 Evening Brief", "\n".join(lines), tags=["calendar"])
+
+
+def _send_event_reminders():
+    config = load_config()
+    mins = int(config.get("calendar", {}).get("reminder_minutes", 60))
+    now = datetime.now()
+    target_time = (now + timedelta(minutes=mins)).strftime("%H:%M")
+    today = now.strftime("%Y-%m-%d")
+    conn = get_db()
+    evs = conn.execute(
+        "SELECT * FROM events WHERE date = ? AND time = ? AND reminder_sent = 0",
+        (today, target_time),
+    ).fetchall()
+    for e in evs:
+        msg = f"{e['title']} starts in {mins} min"
+        if e['notes']:
+            msg += f"\n{e['notes']}"
+        notify("📅 Reminder", msg, tags=["alarm_clock"])
+        conn.execute("UPDATE events SET reminder_sent = 1 WHERE id = ?", (e['id'],))
+    conn.commit()
+    conn.close()
+
+
+def _calendar_scheduler():
+    sent = {}
+    while True:
+        try:
+            now = datetime.now()
+            today = now.strftime("%Y-%m-%d")
+            hhmm = now.strftime("%H:%M")
+            config = load_config()
+            cal = config.get("calendar", {})
+            day = sent.setdefault(today, {})
+
+            if hhmm == cal.get("morning_brief", "08:00") and not day.get("morning"):
+                day["morning"] = True
+                _send_morning_brief()
+
+            if hhmm == cal.get("evening_brief", "21:00") and not day.get("evening"):
+                day["evening"] = True
+                _send_evening_brief()
+
+            _send_event_reminders()
+
+            for d in [k for k in sent if k < today]:
+                del sent[d]
+        except Exception:
+            pass
+        time.sleep(60)
+
+
+threading.Thread(target=_calendar_scheduler, daemon=True).start()
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -255,38 +391,113 @@ def index():
     return render_template("index.html", tvs=config.get("tvs", []))
 
 
+def _fetch_weather_for(lat, lon, units="fahrenheit"):
+    r = requests.get(
+        "https://api.open-meteo.com/v1/forecast",
+        params={
+            "latitude": lat, "longitude": lon,
+            "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m",
+            "temperature_unit": units,
+            "wind_speed_unit": "mph",
+            "timezone": "auto",
+        },
+        timeout=10,
+    )
+    r.raise_for_status()
+    d = r.json()["current"]
+    unit_sym = "°F" if units == "fahrenheit" else "°C"
+    return {
+        "temp": round(d["temperature_2m"]),
+        "feels_like": round(d["apparent_temperature"]),
+        "humidity": d["relative_humidity_2m"],
+        "wind": round(d["wind_speed_10m"]),
+        "description": WMO_DESCRIPTIONS.get(d["weather_code"], "Unknown"),
+        "icon": wmo_icon(d["weather_code"]),
+        "unit": unit_sym,
+    }
+
+
 @app.route("/api/weather")
 def weather():
     config = load_config()
-    w = config["weather"]
+    units = config.get("weather", {}).get("units", "fahrenheit")
+    conn = get_db()
+    cities = conn.execute(
+        "SELECT * FROM weather_cities ORDER BY display_order, id"
+    ).fetchall()
+    conn.close()
+
+    results = []
+    for city in cities:
+        cache_key = f"weather_{city['id']}"
+        cached = get_cache(cache_key, ttl=600)
+        if cached:
+            results.append(cached)
+            continue
+        try:
+            data = _fetch_weather_for(city["latitude"], city["longitude"], units)
+            data["city_id"] = city["id"]
+            data["name"] = city["name"]
+            set_cache(cache_key, data)
+            results.append(data)
+        except Exception as e:
+            results.append({"city_id": city["id"], "name": city["name"], "error": str(e)})
+
+    return jsonify(results)
+
+
+@app.route("/api/weather/cities", methods=["GET"])
+def weather_cities():
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM weather_cities ORDER BY display_order, id").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/weather/cities", methods=["POST"])
+def add_weather_city():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name required"}), 400
+
+    # Geocode via Open-Meteo
     try:
-        r = requests.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={
-                "latitude": w["latitude"],
-                "longitude": w["longitude"],
-                "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m",
-                "temperature_unit": w.get("units", "fahrenheit"),
-                "wind_speed_unit": "mph",
-                "timezone": "auto",
-            },
-            timeout=10,
-        )
-        r.raise_for_status()
-        d = r.json()["current"]
-        unit_sym = "°F" if w.get("units", "fahrenheit") == "fahrenheit" else "°C"
-        return jsonify({
-            "city": w["city"],
-            "temp": round(d["temperature_2m"]),
-            "feels_like": round(d["apparent_temperature"]),
-            "humidity": d["relative_humidity_2m"],
-            "wind": round(d["wind_speed_10m"]),
-            "description": WMO_DESCRIPTIONS.get(d["weather_code"], "Unknown"),
-            "icon": wmo_icon(d["weather_code"]),
-            "unit": unit_sym,
-        })
+        geo = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": name, "count": 1, "language": "en", "format": "json"},
+            timeout=8,
+        ).json()
+        results = geo.get("results") or []
+        if not results:
+            return jsonify({"error": f"City not found: {name}"}), 404
+        r = results[0]
+        display = r["name"]
+        if r.get("admin1"):
+            display += f", {r['admin1']}"
+        lat, lon = r["latitude"], r["longitude"]
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Geocoding failed: {e}"}), 500
+
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO weather_cities (name, latitude, longitude) VALUES (?,?,?)",
+        (display, lat, lon),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM weather_cities WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/weather/cities/<int:city_id>", methods=["DELETE"])
+def delete_weather_city(city_id):
+    conn = get_db()
+    conn.execute("DELETE FROM weather_cities WHERE id = ?", (city_id,))
+    conn.commit()
+    conn.close()
+    _cache.pop(f"weather_{city_id}", None)
+    return "", 204
 
 
 @app.route("/api/news")
@@ -654,6 +865,47 @@ def update_grocery(item_id):
 def delete_grocery(item_id):
     conn = get_db()
     conn.execute("DELETE FROM groceries WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
+
+
+# ── Calendar ──────────────────────────────────────────────────────────────────
+
+@app.route("/api/calendar", methods=["GET"])
+def get_events():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM events WHERE date >= date('now','localtime','-1 day') ORDER BY date, time ASC NULLS LAST"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/calendar", methods=["POST"])
+def add_event():
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    date  = (data.get("date") or "").strip()
+    if not title or not date:
+        return jsonify({"error": "Title and date required"}), 400
+    t     = (data.get("time") or "").strip() or None
+    notes = (data.get("notes") or "").strip()
+    conn  = get_db()
+    cur   = conn.execute(
+        "INSERT INTO events (title, date, time, notes) VALUES (?,?,?,?)",
+        (title[:200], date, t, notes[:500]),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM events WHERE id = ?", (cur.lastrowid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/calendar/<int:event_id>", methods=["DELETE"])
+def delete_event(event_id):
+    conn = get_db()
+    conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
     conn.commit()
     conn.close()
     return "", 204

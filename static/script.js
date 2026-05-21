@@ -93,25 +93,62 @@ function timeAgo(str) {
 async function fetchWeather() {
   const el = document.getElementById("weather-content");
   try {
-    const d = await (await fetch("/api/weather")).json();
-    if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
-    el.innerHTML = `
-      <div class="weather-main">
-        <span class="weather-icon">${d.icon}</span>
-        <div>
-          <div class="weather-temp">${d.temp}${d.unit}</div>
-          <div class="weather-desc">${d.description}</div>
-          <div class="weather-city">${d.city}</div>
-        </div>
-      </div>
-      <div class="weather-meta">
-        <span>&#128167; ${d.humidity}%</span>
-        <span>&#128168; ${d.wind} mph</span>
-        <span>&#127777;&#65039; Feels ${d.feels_like}${d.unit}</span>
-      </div>`;
+    const cities = await (await fetch("/api/weather")).json();
+    if (!cities.length) {
+      el.innerHTML = '<p class="muted">No cities added yet.</p>';
+      return;
+    }
+    el.innerHTML = cities.map(d => {
+      if (d.error) return `
+        <div class="weather-city">
+          <div class="weather-city-header">
+            <span class="weather-city-name">${escapeHtml(d.name)}</span>
+            <button class="btn-del" onclick="deleteCity(${d.city_id})">&times;</button>
+          </div>
+          <div class="weather-city-details error">${escapeHtml(d.error)}</div>
+        </div>`;
+      return `
+        <div class="weather-city">
+          <div class="weather-city-header">
+            <span class="weather-city-name">${escapeHtml(d.name)}</span>
+            <span class="weather-city-temp">${d.icon} ${d.temp}${d.unit}</span>
+            <button class="btn-del" onclick="deleteCity(${d.city_id})">&times;</button>
+          </div>
+          <div class="weather-city-details">
+            ${escapeHtml(d.description)} &nbsp;·&nbsp;
+            Feels ${d.feels_like}${d.unit} &nbsp;·&nbsp;
+            &#128167; ${d.humidity}% &nbsp;·&nbsp; &#128168; ${d.wind} mph
+          </div>
+        </div>`;
+    }).join("");
   } catch {
     el.innerHTML = '<p class="error">Failed to load weather</p>';
   }
+}
+
+async function addCity(e) {
+  e.preventDefault();
+  const input = document.getElementById("city-input");
+  const name = input.value.trim();
+  if (!name) return;
+  input.disabled = true;
+  try {
+    const res = await fetch("/api/weather/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) { input.value = ""; fetchWeather(); }
+    else {
+      const d = await res.json();
+      alert(d.error || "Could not add city");
+    }
+  } finally { input.disabled = false; }
+}
+
+async function deleteCity(id) {
+  await fetch(`/api/weather/cities/${id}`, { method: "DELETE" });
+  fetchWeather();
 }
 
 // ── News ──────────────────────────────────────────────────────────────────────
@@ -456,6 +493,70 @@ function loadAll() {
   fetchTodos();
   fetchGroceries();
   fetchNotes();
+  fetchCalendar();
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+async function fetchCalendar() {
+  const el = document.getElementById("cal-list");
+  try {
+    const events = await (await fetch("/api/calendar")).json();
+    if (!events.length) { el.innerHTML = '<p class="muted">No upcoming events.</p>'; return; }
+
+    const today    = new Date(); today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    const oneWeek  = new Date(today); oneWeek.setDate(today.getDate() + 7);
+
+    const groups = {};
+    for (const ev of events) {
+      const d = new Date(ev.date + "T00:00:00");
+      let label;
+      if (d < today)       label = "Earlier";
+      else if (+d === +today)    label = "Today";
+      else if (+d === +tomorrow) label = "Tomorrow";
+      else if (d < oneWeek) label = d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+      else                  label = d.toLocaleDateString([], { month: "long", day: "numeric" });
+      (groups[label] = groups[label] || []).push(ev);
+    }
+
+    el.innerHTML = Object.entries(groups).map(([label, evs]) => `
+      <div class="cal-group-label">${escapeHtml(label)}</div>
+      ${evs.map(ev => `
+        <div class="cal-event">
+          <div class="cal-event-time">${ev.time ? ev.time.slice(0,5) : "All day"}</div>
+          <div class="cal-event-body">
+            <div class="cal-event-title">${escapeHtml(ev.title)}</div>
+            ${ev.notes ? `<div class="cal-event-notes">${escapeHtml(ev.notes)}</div>` : ""}
+          </div>
+          <button class="btn-del" onclick="deleteEvent(${ev.id})" title="Delete">&times;</button>
+        </div>`).join("")}`).join("");
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load calendar</p>';
+  }
+}
+
+async function addEvent(e) {
+  e.preventDefault();
+  const title = document.getElementById("event-title").value.trim();
+  const date  = document.getElementById("event-date").value;
+  const time  = document.getElementById("event-time").value;
+  if (!title || !date) return;
+  const res = await fetch("/api/calendar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, date, time: time || null }),
+  }).catch(() => null);
+  if (res && res.ok) {
+    document.getElementById("event-title").value = "";
+    document.getElementById("event-date").value  = "";
+    document.getElementById("event-time").value  = "";
+    fetchCalendar();
+  }
+}
+
+async function deleteEvent(id) {
+  await fetch(`/api/calendar/${id}`, { method: "DELETE" });
+  fetchCalendar();
 }
 
 updateClock();
@@ -469,4 +570,5 @@ setInterval(fetchNotes,    15_000);
 setInterval(fetchDevices,  30_000);
 setInterval(fetchPihole,   60_000);
 setInterval(fetchWeather,  10 * 60_000);
+setInterval(fetchCalendar,      60_000);
 setInterval(fetchNews,     30 * 60_000);

@@ -37,6 +37,12 @@
     <div class="card" id="weather-card">
       <div class="card-title">&#127780; Weather</div>
       <div id="weather-content" class="loading">Loading&hellip;</div>
+      <form id="city-form" onsubmit="addCity(event)" style="margin-top:.6rem">
+        <div class="input-row">
+          <input id="city-input" type="text" placeholder="Add city&hellip;" maxlength="100" autocomplete="off">
+          <button type="submit" class="btn-submit">Add</button>
+        </div>
+      </form>
     </div>
 
     <!-- TV Controls -->
@@ -131,6 +137,22 @@
         </div>
       </form>
       <div id="notes-list"></div>
+    </div>
+
+    <!-- Calendar -->
+    <div class="card cal-card" id="cal-card">
+      <div class="card-title">&#128197; Calendar</div>
+      <form id="event-form" onsubmit="addEvent(event)">
+        <div class="input-stack">
+          <input id="event-title" type="text" placeholder="Event title&hellip;" maxlength="200" autocomplete="off">
+          <div class="input-row">
+            <input id="event-date" type="date">
+            <input id="event-time" type="time" style="width:7rem">
+            <button type="submit" class="btn-submit">Add</button>
+          </div>
+        </div>
+      </form>
+      <div id="cal-list"></div>
     </div>
 
     <!-- Network Devices -->

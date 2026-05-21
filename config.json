@@ -53,6 +53,11 @@
     "smtp_password": "",
     "recipients": []
   },
+  "calendar": {
+    "morning_brief": "08:00",
+    "evening_brief": "21:00",
+    "reminder_minutes": 60
+  },
   "update": {
     "password": "",
     "branch": "claude/setup-pi-dashboard-j0879"

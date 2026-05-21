@@ -106,6 +106,7 @@ header {
     "todo     grocery"
     "notes    notes"
     "devices  devices"
+    "cal      cal"
     "news     news";
   gap: 1rem;
   padding: 1rem;
@@ -128,6 +129,7 @@ header {
       "grocery"
       "notes"
       "devices"
+      "cal"
       "news";
   }
 }
@@ -143,7 +145,44 @@ header {
 #grocery-card  { grid-area: grocery; }
 .notes-card    { grid-area: notes; }
 .devices-card  { grid-area: devices; }
+.cal-card      { grid-area: cal; }
 .news-card     { grid-area: news; }
+
+/* ── Weather multi-city ─────────────────── */
+.weather-city {
+  padding: .55rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.weather-city:last-child { border-bottom: none; }
+.weather-city-header {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.weather-city-name { font-weight: 600; }
+.weather-city-temp { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+.weather-city-details { font-size: 0.82rem; color: var(--muted); margin-top: .15rem; }
+.weather-city .btn-del { float: right; margin-top: .1rem; }
+
+/* ── Calendar ───────────────────────────── */
+.cal-group-label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+  margin: .8rem 0 .3rem;
+}
+.cal-group-label:first-child { margin-top: .2rem; }
+.cal-event {
+  display: flex; align-items: flex-start; gap: .5rem;
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.cal-event:last-child { border-bottom: none; }
+.cal-event-time {
+  min-width: 3.5rem; font-size: 0.8rem;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+  padding-top: .05rem;
+}
+.cal-event-body { flex: 1; }
+.cal-event-title { font-weight: 500; }
+.cal-event-notes { font-size: 0.8rem; color: var(--muted); margin-top: .1rem; }
 
 /* ── Card ────────────────────────────────── */
 .card {
