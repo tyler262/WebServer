@@ -1,5 +1,5 @@
 // ── State ──────────────────────────────────────────────────────────────────────
-let tvs = [], devs = [], feeds = [], smsRecipients = [];
+let tvs = [], devs = [], feeds = [], smsRecipients = [], stockSymbols = [];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function esc(s) {
@@ -69,6 +69,10 @@ async function loadConfig() {
   $('news-per-feed').value = news.articles_per_feed ?? 5;
   feeds = [...(news.feeds || [])];
   renderFeeds();
+
+  const stocks = cfg.stocks || {};
+  stockSymbols = [...(stocks.symbols || [])];
+  renderSymbols();
 
   const photo = cfg.photo || {};
   $('photo-source').value   = photo.source      || 'picsum';
@@ -217,6 +221,35 @@ async function addFeed() {
 }
 
 async function delFeed(i) { feeds.splice(i, 1); renderFeeds(); await saveSection('news'); }
+
+// ── Stock symbols ──────────────────────────────────────────────────────────────
+function renderSymbols() {
+  const el = $('stocks-list');
+  if (!stockSymbols.length) { el.innerHTML = '<p class="muted settings-hint">No symbols added</p>'; return; }
+  el.innerHTML = stockSymbols.map((s, i) => `
+    <div class="array-item">
+      <span class="array-item-label">${esc(s)}</span>
+      <button class="btn-del" onclick="delSymbol(${i})">&times;</button>
+    </div>`).join('');
+}
+
+async function addSymbol() {
+  const input = $('stock-symbol-new');
+  const val = input.value.trim().toUpperCase();
+  if (!val || stockSymbols.includes(val)) { input.value = ''; return; }
+  stockSymbols.push(val);
+  input.value = '';
+  renderSymbols();
+  const ok = await patchConfig({ stocks: { symbols: stockSymbols } });
+  showStatus('stocks-status', ok ? '✓ Saved' : '✗ Save failed', ok);
+}
+
+async function delSymbol(i) {
+  stockSymbols.splice(i, 1);
+  renderSymbols();
+  const ok = await patchConfig({ stocks: { symbols: stockSymbols } });
+  showStatus('stocks-status', ok ? '✓ Saved' : '✗ Save failed', ok);
+}
 
 // ── Photo ──────────────────────────────────────────────────────────────────────
 function toggleNasaKey() {

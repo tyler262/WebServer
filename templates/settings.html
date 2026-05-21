@@ -194,6 +194,19 @@
       <div id="news-status" class="settings-status"></div>
     </div>
 
+    <!-- Stocks -->
+    <div class="card">
+      <div class="card-title">&#128200; Stocks</div>
+      <p class="settings-hint">Ticker symbols to display on the dashboard (e.g. AAPL, SPY, BTC-USD).</p>
+      <div id="stocks-list" class="array-list"></div>
+      <div class="input-row" style="margin-top:.5rem">
+        <input type="text" id="stock-symbol-new" placeholder="Symbol (e.g. AAPL)" maxlength="20"
+               style="text-transform:uppercase" onkeydown="if(event.key==='Enter')addSymbol()">
+        <button class="btn-submit" onclick="addSymbol()">Add</button>
+      </div>
+      <div id="stocks-status" class="settings-status"></div>
+    </div>
+
     <!-- Photo -->
     <div class="card">
       <div class="card-title">&#128247; Photo of the Day</div>
