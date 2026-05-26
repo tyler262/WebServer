@@ -1,39 +1,7 @@
-// ── Clock ─────────────────────────────────────────────────────────────────────
-function updateClock() {
-  const now = new Date();
-  document.getElementById("clock").textContent = now.toLocaleString("en-US", {
-    weekday: "short", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
-// ── Shared helpers ────────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function fmtDate(str) {
-  try {
-    const d = new Date(str.replace(" ", "T"));
-    return d.toLocaleDateString([], { month: "short", day: "numeric" })
-      + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch { return str; }
-}
-
-function timeAgo(str) {
-  try {
-    const diff = (Date.now() - new Date(str)) / 60000;
-    if (diff < 60)   return Math.round(diff) + "m ago";
-    if (diff < 1440) return Math.round(diff / 60) + "h ago";
-    return new Date(str).toLocaleDateString();
-  } catch { return ""; }
-}
-
 // ── Weather ───────────────────────────────────────────────────────────────────
 async function fetchWeather() {
   const el = document.getElementById("weather-content");
+  if (!el) return;
   try {
     const cities = await (await fetch("/api/weather")).json();
     if (!cities.length) {
@@ -88,6 +56,31 @@ async function fetchWeather() {
   }
 }
 
+async function addCity(e) {
+  e.preventDefault();
+  const input = document.getElementById("city-input");
+  const name = input.value.trim();
+  if (!name) return;
+  input.disabled = true;
+  try {
+    const res = await fetch("/api/weather/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) { input.value = ""; fetchWeather(); }
+    else {
+      const d = await res.json();
+      alert(d.error || "Could not add city");
+    }
+  } finally { input.disabled = false; }
+}
+
+async function deleteCity(id) {
+  await fetch(`/api/weather/cities/${id}`, { method: "DELETE" });
+  fetchWeather();
+}
+
 // ── Stocks ────────────────────────────────────────────────────────────────────
 async function fetchStocks() {
   const el = document.getElementById("stocks-content");
@@ -137,34 +130,10 @@ async function fetchMoon() {
   }
 }
 
-async function addCity(e) {
-  e.preventDefault();
-  const input = document.getElementById("city-input");
-  const name = input.value.trim();
-  if (!name) return;
-  input.disabled = true;
-  try {
-    const res = await fetch("/api/weather/cities", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (res.ok) { input.value = ""; fetchWeather(); }
-    else {
-      const d = await res.json();
-      alert(d.error || "Could not add city");
-    }
-  } finally { input.disabled = false; }
-}
-
-async function deleteCity(id) {
-  await fetch(`/api/weather/cities/${id}`, { method: "DELETE" });
-  fetchWeather();
-}
-
 // ── News ──────────────────────────────────────────────────────────────────────
 async function fetchNews() {
   const el = document.getElementById("news-content");
+  if (!el) return;
   try {
     const articles = await (await fetch("/api/news")).json();
     if (!articles.length) { el.innerHTML = '<p class="muted">No articles</p>'; return; }
@@ -178,28 +147,10 @@ async function fetchNews() {
   }
 }
 
-// ── Devices ───────────────────────────────────────────────────────────────────
-async function fetchDevices() {
-  const el = document.getElementById("devices-content");
-  try {
-    const devices = await (await fetch("/api/devices")).json();
-    if (!devices.length) { el.innerHTML = '<p class="muted">No devices configured</p>'; return; }
-    el.innerHTML = `<div class="devices-grid">${devices.map(d => `
-      <div class="device-chip">
-        <span class="dot ${d.online ? "online" : "offline"}"></span>
-        <div>
-          <div>${d.name}</div>
-          <div class="device-sub">${d.ip} &mdash; ${d.online ? "Online" : "Offline"}</div>
-        </div>
-      </div>`).join("")}</div>`;
-  } catch {
-    el.innerHTML = '<p class="error">Failed to load devices</p>';
-  }
-}
-
 // ── Pi-hole ───────────────────────────────────────────────────────────────────
 async function fetchPihole() {
   const el = document.getElementById("pihole-content");
+  if (!el) return;
   try {
     const d = await (await fetch("/api/pihole")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
@@ -251,6 +202,7 @@ function meter(label, pct, detail) {
 
 async function fetchSystem() {
   const el = document.getElementById("system-content");
+  if (!el) return;
   try {
     const d = await (await fetch("/api/system")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
@@ -274,6 +226,7 @@ async function fetchSystem() {
 // ── Quote ─────────────────────────────────────────────────────────────────────
 async function fetchQuote(forceRefresh = false) {
   const el = document.getElementById("quote-content");
+  if (!el) return;
   try {
     const d = await (await fetch(forceRefresh ? "/api/quote?refresh=1" : "/api/quote")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
@@ -288,6 +241,7 @@ async function fetchQuote(forceRefresh = false) {
 // ── Joke ──────────────────────────────────────────────────────────────────────
 async function fetchJoke(forceRefresh = false) {
   const el = document.getElementById("joke-content");
+  if (!el) return;
   try {
     const d = await (await fetch(forceRefresh ? "/api/joke?refresh=1" : "/api/joke")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
@@ -312,6 +266,7 @@ function revealPunchline(btn) {
 // ── Photo ─────────────────────────────────────────────────────────────────────
 async function fetchPhoto(forceRefresh = false) {
   const el = document.getElementById("photo-content");
+  if (!el) return;
   try {
     const d = await (await fetch(forceRefresh ? "/api/photo?refresh=1" : "/api/photo")).json();
     if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
@@ -324,7 +279,7 @@ async function fetchPhoto(forceRefresh = false) {
   }
 }
 
-// ── Todo list (3-state: 0=pending, 1=in progress, 2=done) ────────────────────
+// ── Todo list ─────────────────────────────────────────────────────────────────
 const TODO_STATUS = [
   { cls: "pending",     icon: "",  next: 1 },
   { cls: "in-progress", icon: "▶", next: 2 },
@@ -333,6 +288,7 @@ const TODO_STATUS = [
 
 async function fetchTodos() {
   const el = document.getElementById("todo-list");
+  if (!el) return;
   try {
     const todos = await (await fetch("/api/todos")).json();
     if (!todos.length) {
@@ -384,6 +340,7 @@ async function deleteTodo(id) {
 // ── Grocery list ──────────────────────────────────────────────────────────────
 async function fetchGroceries() {
   const el = document.getElementById("grocery-list");
+  if (!el) return;
   try {
     const items = await (await fetch("/api/groceries")).json();
     if (!items.length) {
@@ -428,48 +385,6 @@ async function toggleGrocery(id, done) {
 async function deleteGrocery(id) {
   await fetch(`/api/groceries/${id}`, { method: "DELETE" }).catch(() => null);
   fetchGroceries();
-}
-
-// ── Suggestions ───────────────────────────────────────────────────────────────
-async function fetchNotes() {
-  const el = document.getElementById("notes-list");
-  try {
-    const notes = await (await fetch("/api/notes")).json();
-    if (!notes.length) {
-      el.innerHTML = '<p class="muted" style="font-size:0.85rem;padding:0.5rem 0">No suggestions yet</p>';
-      return;
-    }
-    el.innerHTML = `<div class="notes-scroll">${notes.map(n => `
-      <div class="note-item" id="note-${n.id}">
-        <div class="note-header">
-          <span class="note-name">${escapeHtml(n.name || "Anonymous")}</span>
-          <span class="note-time">${n.created_at ? fmtDate(n.created_at) : ""}</span>
-        </div>
-        <div class="note-body">${escapeHtml(n.text)}</div>
-        <button class="btn-del" onclick="deleteNote(${n.id})" title="Delete">&times;</button>
-      </div>`).join("")}</div>`;
-  } catch {
-    el.innerHTML = '<p class="error">Failed to load suggestions</p>';
-  }
-}
-
-async function addNote(e) {
-  e.preventDefault();
-  const nameEl = document.getElementById("note-name");
-  const textEl = document.getElementById("note-text");
-  const text = textEl.value.trim();
-  if (!text) return;
-  const res = await fetch("/api/notes", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: nameEl.value.trim(), text }),
-  }).catch(() => null);
-  if (res && res.ok) { textEl.value = ""; nameEl.value = ""; fetchNotes(); }
-}
-
-async function deleteNote(id) {
-  await fetch(`/api/notes/${id}`, { method: "DELETE" }).catch(() => null);
-  fetchNotes();
 }
 
 // ── Vehicles / Oil Changes (dashboard card) ───────────────────────────────────
@@ -518,6 +433,7 @@ async function logOilChange(vehicleId) {
 let _storageSearchTimer = null;
 function searchStorage(query) {
   const el = document.getElementById("storage-search-results");
+  if (!el) return;
   clearTimeout(_storageSearchTimer);
   if (!query.trim()) { el.innerHTML = ""; return; }
   _storageSearchTimer = setTimeout(async () => {
@@ -558,28 +474,10 @@ async function turnOffTV(index, btn) {
   setTimeout(() => { statusEl.textContent = ""; statusEl.className = "tv-status-msg"; }, 5000);
 }
 
-// ── Init & refresh ────────────────────────────────────────────────────────────
-function loadAll() {
-  fetchWeather();
-  fetchStocks();
-  fetchMoon();
-  fetchVehicles();
-  fetchNews();
-  fetchDevices();
-  fetchPihole();
-  fetchSystem();
-  fetchQuote();
-  fetchJoke();
-  fetchPhoto();
-  fetchTodos();
-  fetchGroceries();
-  fetchNotes();
-  fetchCalendar();
-}
-
 // ── Calendar ──────────────────────────────────────────────────────────────────
 async function fetchCalendar() {
   const el = document.getElementById("cal-list");
+  if (!el) return;
   try {
     const events = await (await fetch("/api/calendar")).json();
     if (!events.length) { el.innerHTML = '<p class="muted">No upcoming events.</p>'; return; }
@@ -592,7 +490,7 @@ async function fetchCalendar() {
     for (const ev of events) {
       const d = new Date(ev.date + "T00:00:00");
       let label;
-      if (d < today)       label = "Earlier";
+      if (d < today)             label = "Earlier";
       else if (+d === +today)    label = "Today";
       else if (+d === +tomorrow) label = "Tomorrow";
       else if (d < oneWeek) label = d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
@@ -640,19 +538,27 @@ async function deleteEvent(id) {
   fetchCalendar();
 }
 
-updateClock();
-loadAll();
+// ── Init & refresh (overview only) ────────────────────────────────────────────
+function loadAll() {
+  fetchWeather();
+  fetchStocks();
+  fetchMoon();
+  fetchVehicles();
+  fetchPihole();
+  fetchSystem();
+  fetchQuote();
+  fetchJoke();
+  fetchPhoto();
+  fetchCalendar();
+}
 
-setInterval(updateClock,    1_000);
-setInterval(fetchSystem,   10_000);
-setInterval(fetchTodos,    15_000);
-setInterval(fetchGroceries,15_000);
-setInterval(fetchNotes,    15_000);
-setInterval(fetchDevices,  30_000);
-setInterval(fetchPihole,   60_000);
-setInterval(fetchVehicles, 5 * 60_000);
-setInterval(fetchStocks,   5 * 60_000);
-setInterval(fetchWeather,  10 * 60_000);
-setInterval(fetchMoon,     60 * 60_000);
-setInterval(fetchCalendar,      60_000);
-setInterval(fetchNews,     30 * 60_000);
+if (document.getElementById("weather-content")) {
+  loadAll();
+  setInterval(fetchSystem,   10_000);
+  setInterval(fetchPihole,   60_000);
+  setInterval(fetchVehicles, 5 * 60_000);
+  setInterval(fetchStocks,   5 * 60_000);
+  setInterval(fetchWeather,  10 * 60_000);
+  setInterval(fetchMoon,     60 * 60_000);
+  setInterval(fetchCalendar,      60_000);
+}

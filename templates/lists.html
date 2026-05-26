@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Lists — Dashboard{% endblock %}
+
+{% block header_title %}&#9989; Lists{% endblock %}
+
+{% block content %}
+  <main class="lists-main">
+
+    <!-- Todo List -->
+    <div class="card" id="todo-card">
+      <div class="card-title">&#9989; To-Do List</div>
+      <form id="todo-form" onsubmit="addTodo(event)">
+        <div class="input-row">
+          <input id="todo-input" type="text" placeholder="Add a task&hellip;" maxlength="500" autocomplete="off">
+          <button type="submit" class="btn-submit">Add</button>
+        </div>
+      </form>
+      <div id="todo-list"></div>
+    </div>
+
+    <!-- Grocery List -->
+    <div class="card" id="grocery-card">
+      <div class="card-title">&#128722; Grocery List</div>
+      <form id="grocery-form" onsubmit="addGrocery(event)">
+        <div class="input-row">
+          <input id="grocery-input" type="text" placeholder="Add item&hellip;" maxlength="300" autocomplete="off">
+          <button type="submit" class="btn-submit">Add</button>
+        </div>
+      </form>
+      <div id="grocery-list"></div>
+    </div>
+
+  </main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/script.js"></script>
+<script>
+  fetchTodos();
+  fetchGroceries();
+  setInterval(fetchTodos,     15_000);
+  setInterval(fetchGroceries, 15_000);
+</script>
+{% endblock %}

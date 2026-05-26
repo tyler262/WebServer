@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar — Dashboard{% endblock %}
+
+{% block header_title %}&#128197; Calendar{% endblock %}
+
+{% block content %}
+  <main class="settings-main" style="max-width:700px">
+    <div class="card">
+      <div class="card-title">&#128197; Upcoming Events</div>
+      <form id="event-form" onsubmit="addEvent(event)" style="margin-bottom:1rem">
+        <div class="input-stack">
+          <input id="event-title" type="text" placeholder="Event title&hellip;" maxlength="200" autocomplete="off">
+          <div class="input-row">
+            <input id="event-date" type="date">
+            <input id="event-time" type="time" style="width:7rem">
+            <button type="submit" class="btn-submit">Add</button>
+          </div>
+        </div>
+      </form>
+      <div id="cal-list" class="loading">Loading&hellip;</div>
+    </div>
+  </main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/script.js"></script>
+<script>
+  fetchCalendar();
+  setInterval(fetchCalendar, 60_000);
+</script>
+{% endblock %}

@@ -1,17 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Storage — Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-  <header>
-    <div class="header-title">&#128230; Storage</div>
-    <a href="/" class="btn-back">&#8592; Dashboard</a>
-  </header>
+{% extends "base.html" %}
 
+{% block title %}Storage — Dashboard{% endblock %}
+
+{% block header_title %}&#128230; Storage{% endblock %}
+
+{% block content %}
   <main class="settings-main" style="max-width:900px">
 
     <!-- Search -->
@@ -29,16 +22,16 @@
     <!-- Add location -->
     <div class="card">
       <div class="card-title">&#43; New Location</div>
-      <div class="input-stack" style="margin-bottom:0">
-        <div class="input-row" style="margin-bottom:0">
-          <input type="text" id="new-loc-name" placeholder="Location name (e.g. Above Garage, Hall Closet)&hellip;" maxlength="200" autocomplete="off" onkeydown="if(event.key==='Enter')addLocation()">
-          <button class="btn-submit" onclick="addLocation()">Add Location</button>
-        </div>
+      <div class="input-row" style="margin-bottom:0">
+        <input type="text" id="new-loc-name" placeholder="Location name (e.g. Above Garage, Hall Closet)&hellip;" maxlength="200" autocomplete="off" onkeydown="if(event.key==='Enter')addLocation()">
+        <button class="btn-submit" onclick="addLocation()">Add Location</button>
       </div>
       <div id="new-loc-status" class="settings-status"></div>
     </div>
 
   </main>
-  <script src="/static/storage.js"></script>
-</body>
-</html>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/storage.js"></script>
+{% endblock %}

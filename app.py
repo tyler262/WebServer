@@ -482,12 +482,27 @@ def _get_moon_phase():
 @app.route("/")
 def index():
     config = load_config()
-    return render_template("index.html", tvs=config.get("tvs", []))
+    return render_template("index.html", tvs=config.get("tvs", []), page="overview")
+
+
+@app.route("/calendar")
+def calendar_page():
+    return render_template("calendar.html", page="calendar")
+
+
+@app.route("/lists")
+def lists_page():
+    return render_template("lists.html", page="lists")
+
+
+@app.route("/news")
+def news_page():
+    return render_template("news.html", page="news")
 
 
 @app.route("/settings")
 def settings_page():
-    return render_template("settings.html")
+    return render_template("settings.html", page="settings")
 
 
 @app.route("/api/config", methods=["GET"])
@@ -1223,7 +1238,7 @@ def delete_event(event_id):
 
 @app.route("/storage")
 def storage_page():
-    return render_template("storage.html")
+    return render_template("storage.html", page="storage")
 
 
 @app.route("/api/storage")
@@ -1322,7 +1337,7 @@ def delete_storage_item(item_id):
 
 @app.route("/vehicles")
 def vehicles_page():
-    return render_template("vehicles.html")
+    return render_template("vehicles.html", page="vehicles")
 
 
 @app.route("/api/vehicles")

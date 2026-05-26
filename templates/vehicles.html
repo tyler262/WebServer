@@ -1,17 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Oil Changes — Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-  <header>
-    <div class="header-title">&#128663; Oil Changes</div>
-    <a href="/" class="btn-back">&#8592; Dashboard</a>
-  </header>
+{% extends "base.html" %}
 
+{% block title %}Vehicles — Dashboard{% endblock %}
+
+{% block header_title %}&#128663; Oil Changes{% endblock %}
+
+{% block content %}
   <main class="settings-main" style="max-width:800px">
 
     <div id="vehicles-container"></div>
@@ -27,6 +20,8 @@
     </div>
 
   </main>
-  <script src="/static/vehicles.js"></script>
-</body>
-</html>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vehicles.js"></script>
+{% endblock %}

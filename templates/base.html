@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Home Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+  <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <nav id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <span>&#127968; Home Dashboard</span>
+      <button class="sidebar-close" onclick="closeSidebar()">&times;</button>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="/" class="sidebar-link{% if page == 'overview' %} active{% endif %}">&#127968; Overview</a></li>
+      <li><a href="/calendar" class="sidebar-link{% if page == 'calendar' %} active{% endif %}">&#128197; Calendar</a></li>
+      <li><a href="/lists" class="sidebar-link{% if page == 'lists' %} active{% endif %}">&#9989; Lists</a></li>
+      <li><a href="/news" class="sidebar-link{% if page == 'news' %} active{% endif %}">&#128240; News</a></li>
+      <li><a href="/vehicles" class="sidebar-link{% if page == 'vehicles' %} active{% endif %}">&#128663; Vehicles</a></li>
+      <li><a href="/storage" class="sidebar-link{% if page == 'storage' %} active{% endif %}">&#128230; Storage</a></li>
+      <li class="sidebar-sep"></li>
+      <li><a href="/settings" class="sidebar-link{% if page == 'settings' %} active{% endif %}">&#9881; Settings</a></li>
+    </ul>
+  </nav>
+
+  <header>
+    <button class="btn-hamburger" onclick="openSidebar()">&#9776;</button>
+    <div class="header-title">{% block header_title %}&#127968; Home Dashboard{% endblock %}</div>
+    <div id="clock" class="header-clock"></div>
+    {% block header_actions %}{% endblock %}
+  </header>
+
+  {% block content %}{% endblock %}
+
+  <script>
+    function openSidebar() {
+      document.getElementById('sidebar').classList.add('open');
+      document.getElementById('sidebar-overlay').classList.add('visible');
+    }
+    function closeSidebar() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebar-overlay').classList.remove('visible');
+    }
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeSidebar(); });
+
+    function updateClock() {
+      const el = document.getElementById('clock');
+      if (el) el.textContent = new Date().toLocaleString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    }
+    function escapeHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function fmtDate(str) {
+      try {
+        const d = new Date(str.replace(' ','T'));
+        return d.toLocaleDateString([],{month:'short',day:'numeric'}) + ' ' +
+               d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      } catch { return str; }
+    }
+    function timeAgo(str) {
+      try {
+        const diff = (Date.now() - new Date(str)) / 60000;
+        if (diff < 60)   return Math.round(diff) + 'm ago';
+        if (diff < 1440) return Math.round(diff/60) + 'h ago';
+        return new Date(str).toLocaleDateString();
+      } catch { return ''; }
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

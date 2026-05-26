@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}News — Dashboard{% endblock %}
+
+{% block header_title %}&#128240; News{% endblock %}
+
+{% block content %}
+  <main class="settings-main">
+    <div class="card">
+      <div class="card-title">&#128240; Top News</div>
+      <div id="news-content" class="news-scroll loading">Loading&hellip;</div>
+    </div>
+  </main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/script.js"></script>
+<script>
+  fetchNews();
+  setInterval(fetchNews, 30 * 60_000);
+</script>
+{% endblock %}
