@@ -354,7 +354,20 @@ header {
 
 .tv-item:last-of-type { border-bottom: none; }
 
-.tv-name { font-size: 0.95rem; }
+.tv-name {
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.tv-ip {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: 0.5rem;
+}
 
 .btn-off {
   background: transparent;
@@ -1269,3 +1282,141 @@ select option { background: var(--card-bg); }
   color: var(--accent);
   margin-top: 0.25rem;
 }
+
+/* ── GPIO page ───────────────────────────── */
+.gpio-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+@media (max-width: 640px) {
+  .gpio-main { grid-template-columns: 1fr; }
+}
+
+.gpio-ref-card { grid-column: 1 / -1; }
+
+.gpio-unavail {
+  font-size: 0.82rem;
+  color: var(--warning);
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.gpio-unavail code { font-size: 0.78rem; }
+
+.gpio-pin-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.gpio-pin-row:last-child { border-bottom: none; }
+
+.gpio-pin-info { flex: 1; min-width: 0; }
+
+.gpio-pin-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: block;
+}
+
+.gpio-pin-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.gpio-toggle {
+  border: none;
+  border-radius: 5px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+  transition: opacity 0.15s;
+}
+.gpio-toggle.on  { background: var(--success); color: #0f1117; }
+.gpio-toggle.off { background: var(--card-border); color: var(--muted); }
+.gpio-toggle:hover { opacity: 0.82; }
+
+.gpio-input-state {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.7rem;
+  border-radius: 5px;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+}
+.gpio-input-state.high { color: var(--success); background: rgba(74,222,128,0.1); }
+.gpio-input-state.low  { color: var(--muted);   background: var(--bg); }
+
+/* Pin map */
+.pin-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.pin-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.pin-map { display: flex; flex-direction: column; gap: 3px; }
+
+.pin-row {
+  display: flex;
+  gap: 4px;
+}
+
+.pin-chip {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  min-width: 0;
+  outline: 2px solid transparent;
+  transition: outline-color 0.15s;
+}
+
+.pin-chip.used { outline-color: var(--accent); }
+
+.pin-num {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.45);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.pin-lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.type-power33 { background: rgba(249,115,22,0.22); color: #fb923c; }
+.type-power5  { background: rgba(239,68,68,0.2);   color: #f87171; }
+.type-gnd     { background: rgba(75,85,99,0.4);    color: #9ca3af; }
+.type-gpio    { background: rgba(59,130,246,0.18); color: #60a5fa; }
+.type-i2c     { background: rgba(139,92,246,0.2);  color: #a78bfa; }
+.type-spi     { background: rgba(16,185,129,0.18); color: #34d399; }
+.type-uart    { background: rgba(245,158,11,0.2);  color: #fbbf24; }
+
+/* Serial ports */
+.serial-row {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.serial-row:last-child { border-bottom: none; }
+.serial-port { font-size: 0.85rem; color: var(--accent); }

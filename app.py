@@ -22,6 +22,16 @@ try:
 except ImportError:
     _YF_AVAILABLE = False
 
+try:
+    import RPi.GPIO as GPIO
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    _GPIO_AVAILABLE = True
+except (ImportError, RuntimeError):
+    _GPIO_AVAILABLE = False
+
+from concurrent.futures import ThreadPoolExecutor
+
 app = Flask(__name__)
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE  = os.path.join(BASE_DIR, "config.json")
@@ -140,6 +150,21 @@ def init_db():
 
 
 init_db()
+
+
+def init_gpio():
+    if not _GPIO_AVAILABLE:
+        return
+    config = load_config()
+    for p in config.get("gpio", {}).get("pins", []):
+        try:
+            if p.get("mode") == "output":
+                GPIO.setup(p["pin"], GPIO.OUT, initial=GPIO.HIGH if p.get("state", 0) else GPIO.LOW)
+            else:
+                pull_map = {"up": GPIO.PUD_UP, "down": GPIO.PUD_DOWN}
+                GPIO.setup(p["pin"], GPIO.IN, pull_up_down=pull_map.get(p.get("pull", ""), GPIO.PUD_OFF))
+        except Exception:
+            pass
 
 
 # ── Weather codes ──────────────────────────────────────────────────────────────
@@ -443,6 +468,7 @@ def _calendar_scheduler():
 
 
 threading.Thread(target=_calendar_scheduler, daemon=True).start()
+init_gpio()
 
 
 # ── Moon phase ─────────────────────────────────────────────────────────────────
@@ -1632,6 +1658,133 @@ def ota_update():
     threading.Thread(target=_restart, daemon=True).start()
 
     return jsonify({"ok": True, "output": "\n".join(lines)})
+
+
+# ── TV status (ping-based) ─────────────────────────────────────────────────────
+
+@app.route("/api/tv/status")
+def tv_status():
+    config = load_config()
+    tvs = config.get("tvs", [])
+    if not tvs:
+        return jsonify([])
+    def check(args):
+        i, tv = args
+        return {"index": i, "name": tv["name"], "ip": tv["ip"], "online": ping(tv["ip"])}
+    with ThreadPoolExecutor(max_workers=max(len(tvs), 1)) as ex:
+        results = list(ex.map(check, enumerate(tvs)))
+    return jsonify(results)
+
+
+# ── GPIO ───────────────────────────────────────────────────────────────────────
+
+@app.route("/gpio")
+def gpio_page():
+    return render_template("gpio.html", page="gpio")
+
+
+@app.route("/api/gpio/pins", methods=["GET"])
+def get_gpio_pins():
+    config = load_config()
+    pins = config.get("gpio", {}).get("pins", [])
+    result = []
+    for p in pins:
+        state = p.get("state", 0)
+        if _GPIO_AVAILABLE and p.get("mode") == "input":
+            try:
+                state = int(GPIO.input(p["pin"]))
+            except Exception:
+                pass
+        result.append({**p, "state": state})
+    return jsonify({"available": _GPIO_AVAILABLE, "pins": result})
+
+
+@app.route("/api/gpio/pins", methods=["POST"])
+def add_gpio_pin():
+    data = request.get_json() or {}
+    pin_num = data.get("pin")
+    name    = (data.get("name") or "").strip()
+    mode    = data.get("mode", "output")
+    pull    = data.get("pull", "none")
+    if not pin_num or not name:
+        return jsonify({"error": "pin and name required"}), 400
+    config = load_config()
+    gpio_cfg = config.setdefault("gpio", {"pins": []})
+    pins = gpio_cfg.setdefault("pins", [])
+    if any(p["pin"] == pin_num for p in pins):
+        return jsonify({"error": f"GPIO {pin_num} already configured"}), 409
+    new_pin = {"pin": pin_num, "name": name, "mode": mode, "state": 0}
+    if pull != "none":
+        new_pin["pull"] = pull
+    pins.append(new_pin)
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+    if _GPIO_AVAILABLE:
+        try:
+            if mode == "output":
+                GPIO.setup(pin_num, GPIO.OUT, initial=GPIO.LOW)
+            else:
+                pull_map = {"up": GPIO.PUD_UP, "down": GPIO.PUD_DOWN}
+                GPIO.setup(pin_num, GPIO.IN, pull_up_down=pull_map.get(pull, GPIO.PUD_OFF))
+        except Exception as e:
+            return jsonify({**new_pin, "warning": str(e)}), 201
+    return jsonify(new_pin), 201
+
+
+@app.route("/api/gpio/pins/<int:pin_num>", methods=["POST"])
+def set_gpio_pin(pin_num):
+    data  = request.get_json() or {}
+    state = int(bool(data.get("state", 0)))
+    config = load_config()
+    pins = config.get("gpio", {}).get("pins", [])
+    pin = next((p for p in pins if p["pin"] == pin_num and p.get("mode") == "output"), None)
+    if not pin:
+        return jsonify({"error": "Pin not found or not an output"}), 404
+    pin["state"] = state
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+    if _GPIO_AVAILABLE:
+        try:
+            GPIO.output(pin_num, GPIO.HIGH if state else GPIO.LOW)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return jsonify({"pin": pin_num, "state": state})
+
+
+@app.route("/api/gpio/pins/<int:pin_num>", methods=["DELETE"])
+def delete_gpio_pin(pin_num):
+    config = load_config()
+    gpio_cfg = config.get("gpio", {})
+    gpio_cfg["pins"] = [p for p in gpio_cfg.get("pins", []) if p["pin"] != pin_num]
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+    if _GPIO_AVAILABLE:
+        try:
+            GPIO.cleanup(pin_num)
+        except Exception:
+            pass
+    return "", 204
+
+
+@app.route("/api/gpio/i2c-scan")
+def i2c_scan():
+    try:
+        r = subprocess.run(["i2cdetect", "-y", "1"], capture_output=True, text=True, timeout=8)
+        return jsonify({"output": r.stdout or r.stderr})
+    except FileNotFoundError:
+        return jsonify({"error": "i2cdetect not found. Run: sudo apt install i2c-tools"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+@app.route("/api/gpio/serial-ports")
+def serial_ports():
+    import glob
+    ports = glob.glob("/dev/tty[AS]*") + glob.glob("/dev/ttyUSB*")
+    result = []
+    for p in sorted(ports):
+        result.append({"port": p, "exists": os.path.exists(p)})
+    return jsonify(result)
 
 
 if __name__ == "__main__":

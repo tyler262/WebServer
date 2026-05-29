@@ -69,6 +69,9 @@
   "stocks": {
     "symbols": ["SPY", "QQQ", "AAPL", "TSLA"]
   },
+  "gpio": {
+    "pins": []
+  },
   "news": {
     "feeds": [
       {

@@ -20,16 +20,7 @@
     <!-- TV Controls -->
     <div class="card" id="tv-card">
       <div class="card-title">&#128250; TV Controls</div>
-      {% for tv in tvs %}
-      <div class="tv-item">
-        <span class="tv-name">{{ tv.name }}</span>
-        <button class="btn-off" onclick="turnOffTV({{ loop.index0 }}, this)" data-tv="{{ tv.name }}">
-          &#9211; Turn Off
-        </button>
-      </div>
-      {% else %}
-      <p class="muted">No TVs configured. <a href="/settings" style="color:var(--accent)">Add in Settings</a>.</p>
-      {% endfor %}
+      <div id="tv-content" class="loading">Loading&hellip;</div>
       <div id="tv-status" class="tv-status-msg"></div>
     </div>
 

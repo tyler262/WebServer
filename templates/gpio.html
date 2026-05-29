@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}GPIO &amp; I/O — Dashboard{% endblock %}
+
+{% block header_title %}&#9889; GPIO &amp; I/O{% endblock %}
+
+{% block content %}
+  <main class="gpio-main">
+
+    <!-- Configured Pins -->
+    <div class="card">
+      <div class="card-title">&#9889; My Pins</div>
+      <div id="gpio-pins-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- Add Pin -->
+    <div class="card">
+      <div class="card-title">&#43; Configure a Pin</div>
+      <div class="field-group">
+        <label class="field-label">Name</label>
+        <input type="text" id="gpio-name" placeholder="e.g. Living Room Light" maxlength="60">
+      </div>
+      <div class="fields-inline">
+        <div class="field-group">
+          <label class="field-label">BCM GPIO #</label>
+          <input type="number" id="gpio-pin" min="0" max="27" placeholder="e.g. 17">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Mode</label>
+          <select id="gpio-mode" onchange="togglePullOption()">
+            <option value="output">Output (control)</option>
+            <option value="input">Input (read)</option>
+          </select>
+        </div>
+        <div class="field-group" id="gpio-pull-group" style="display:none">
+          <label class="field-label">Pull resistor</label>
+          <select id="gpio-pull">
+            <option value="none">None</option>
+            <option value="up">Pull-up</option>
+            <option value="down">Pull-down</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-submit" onclick="addPin()">Add Pin</button>
+      <div id="gpio-add-status" class="settings-status"></div>
+    </div>
+
+    <!-- I2C Scanner -->
+    <div class="card">
+      <div class="card-title">&#128268; I2C Scanner</div>
+      <p class="settings-hint">Scans the I2C bus (GPIO 2/3) for connected devices. Requires <code>i2c-tools</code> and I2C enabled in raspi-config.</p>
+      <button class="btn-submit" onclick="runI2CScan()">Scan I2C Bus</button>
+      <div id="i2c-status" class="settings-status"></div>
+      <pre id="i2c-output" class="settings-output" style="display:none"></pre>
+    </div>
+
+    <!-- Serial Ports -->
+    <div class="card">
+      <div class="card-title">&#128421; Serial Ports</div>
+      <p class="settings-hint">Active serial and USB-serial devices on this Pi.</p>
+      <div id="serial-content" class="loading">Loading&hellip;</div>
+    </div>
+
+    <!-- Pin Reference -->
+    <div class="card gpio-ref-card">
+      <div class="card-title">&#128279; Pin Reference (BCM)</div>
+      <div class="pin-legend">
+        <span class="pin-badge type-power33">3.3V</span>
+        <span class="pin-badge type-power5">5V</span>
+        <span class="pin-badge type-gnd">GND</span>
+        <span class="pin-badge type-gpio">GPIO</span>
+        <span class="pin-badge type-i2c">I2C</span>
+        <span class="pin-badge type-spi">SPI</span>
+        <span class="pin-badge type-uart">UART</span>
+      </div>
+      <div id="pin-map"></div>
+    </div>
+
+  </main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/gpio.js"></script>
+{% endblock %}

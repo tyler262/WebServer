@@ -81,6 +81,33 @@ async function deleteCity(id) {
   fetchWeather();
 }
 
+// ── TV Status ─────────────────────────────────────────────────────────────────
+async function fetchTVStatus() {
+  const el = document.getElementById("tv-content");
+  if (!el) return;
+  try {
+    const tvs = await (await fetch("/api/tv/status")).json();
+    if (!tvs.length) {
+      el.innerHTML = '<p class="muted">No TVs configured. <a href="/settings" style="color:var(--accent)">Add in Settings</a>.</p>';
+      return;
+    }
+    el.innerHTML = tvs.map(tv => `
+      <div class="tv-item">
+        <span class="tv-name">
+          <span class="dot ${tv.online ? "online" : "offline"}" style="margin-right:.45rem"></span>
+          ${escapeHtml(tv.name)}
+          <span class="tv-ip">${escapeHtml(tv.ip)}</span>
+        </span>
+        <button class="btn-off" onclick="turnOffTV(${tv.index}, this)" data-tv="${escapeHtml(tv.name)}"
+          ${tv.online ? "" : 'disabled title="TV appears offline"'}>
+          &#9211; Turn Off
+        </button>
+      </div>`).join("");
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load TV status</p>';
+  }
+}
+
 // ── Stocks ────────────────────────────────────────────────────────────────────
 async function fetchStocks() {
   const el = document.getElementById("stocks-content");
@@ -541,6 +568,7 @@ async function deleteEvent(id) {
 // ── Init & refresh (overview only) ────────────────────────────────────────────
 function loadAll() {
   fetchWeather();
+  fetchTVStatus();
   fetchStocks();
   fetchMoon();
   fetchVehicles();
@@ -555,6 +583,7 @@ function loadAll() {
 if (document.getElementById("weather-content")) {
   loadAll();
   setInterval(fetchSystem,   10_000);
+  setInterval(fetchTVStatus, 30_000);
   setInterval(fetchPihole,   60_000);
   setInterval(fetchVehicles, 5 * 60_000);
   setInterval(fetchStocks,   5 * 60_000);
