@@ -25,6 +25,7 @@ the in-game link.
 |--------|-----------|
 | `sync.js` | `javascript:$.getScript('http://192.168.1.4:8888/tw/sync.js');` |
 | `troops.js` | `javascript:$.getScript('http://192.168.1.4:8888/tw/troops.js');` |
+| `attack.js` | `javascript:$.getScript('http://192.168.1.4:8888/tw/attack.js');` |
 
 ---
 
@@ -55,6 +56,29 @@ What it collects:
 After running:
 - `tribalwars/CONTEXT.md` is updated — readable by agents and humans
 - `tribalwars/tw_data.json` is updated — raw data, gitignored
+
+### `attack.js` — Farm scout + attack sender
+Scans your recent reports for enemy villages that were **empty** (≤10 troops)
+or **offensive** (few defensive units), then lets you send attacks with one click.
+
+1. Fetches your troops overview to find villages with offensive stacks at home
+2. Scans N pages of your reports and reads each report's defender table
+3. Filters targets by empty threshold or offensive-troop ratio
+4. Shows an in-game modal — target name, coords, troops seen, type (empty/offensive),
+   closest source village, distance, and links to the Rally Point and original report
+5. Editable troop amounts and inter-attack delay before you send anything
+6. "⚔ Rally" link per row opens the pre-filled Rally Point for manual confirmation instead
+
+**CONFIG** (edit at the top of `attack.js`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `reportPages` | 5 | Pages of reports to scan (~15 reports each) |
+| `emptyThreshold` | 10 | Total defender troops ≤ this = "empty" |
+| `offRatio` | 0.25 | Def troops / total ≤ this = "offensive village" |
+| `minOffTroops` | 50 | Min offensive troops needed in your source village |
+| `sendTroops` | axe:200, LC:100, ram:5 | Default troops to send (also editable in modal) |
+| `attackDelay` | 1500ms | Delay between consecutive attacks |
 
 ### `troops.js` — Troop overview
 Shows a table of troops **currently at home** in each of your villages.
