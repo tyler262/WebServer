@@ -77,6 +77,9 @@ async function addCity(e) {
 }
 
 async function deleteCity(id) {
+  const btn  = document.querySelector(`[onclick="deleteCity(${id})"]`);
+  const name = btn?.closest('.weather-city')?.querySelector('.weather-city-name')?.textContent?.trim() || 'this city';
+  if (!confirm(`Remove ${name} from weather?`)) return;
   await fetch(`/api/weather/cities/${id}`, { method: "DELETE" });
   fetchWeather();
 }
@@ -360,6 +363,8 @@ async function setTodoStatus(id, status) {
 }
 
 async function deleteTodo(id) {
+  const text = document.getElementById(`todo-${id}`)?.querySelector('.todo-text')?.textContent?.trim() || 'this task';
+  if (!confirm(`Delete "${text}"?`)) return;
   await fetch(`/api/todos/${id}`, { method: "DELETE" }).catch(() => null);
   fetchTodos();
 }
@@ -410,6 +415,8 @@ async function toggleGrocery(id, done) {
 }
 
 async function deleteGrocery(id) {
+  const text = document.getElementById(`grocery-${id}`)?.querySelector('.todo-text')?.textContent?.trim() || 'this item';
+  if (!confirm(`Remove "${text}" from the grocery list?`)) return;
   await fetch(`/api/groceries/${id}`, { method: "DELETE" }).catch(() => null);
   fetchGroceries();
 }
@@ -561,6 +568,9 @@ async function addEvent(e) {
 }
 
 async function deleteEvent(id) {
+  const btn   = document.querySelector(`[onclick="deleteEvent(${id})"]`);
+  const title = btn?.closest('.cal-event')?.querySelector('.cal-event-title')?.textContent?.trim() || 'this event';
+  if (!confirm(`Delete "${title}"?`)) return;
   await fetch(`/api/calendar/${id}`, { method: "DELETE" });
   fetchCalendar();
 }

@@ -129,6 +129,8 @@ async function addItem(e, locId) {
 
 // ── Delete item ────────────────────────────────────────────────────────────────
 async function deleteItem(itemId, locId) {
+  const name = $(`item-${itemId}`)?.querySelector('.storage-item-name')?.textContent?.trim() || 'this item';
+  if (!confirm(`Remove "${name}"?`)) return;
   await fetch(`/api/storage/items/${itemId}`, { method: 'DELETE' }).catch(() => null);
   const el = $(`item-${itemId}`);
   if (el) el.remove();

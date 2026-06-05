@@ -111,6 +111,9 @@ async function logChange(vehicleId) {
 
 // ── Delete a change record ─────────────────────────────────────────────────────
 async function deleteChange(changeId, vehicleId) {
+  const btn  = document.querySelector(`[onclick="deleteChange(${changeId}, ${vehicleId})"]`);
+  const date = btn?.closest('.oil-change-row')?.querySelector('.oil-history-date')?.textContent?.trim();
+  if (!confirm(date ? `Remove oil change record from ${date}?` : 'Remove this oil change record?')) return;
   await fetch(`/api/oil-changes/${changeId}`, { method: 'DELETE' }).catch(() => null);
   await loadVehicles();
 }

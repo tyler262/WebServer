@@ -118,6 +118,9 @@ async function addPin() {
 
 // ── Delete pin ────────────────────────────────────────────────────────────────
 async function deletePin(pinNum) {
+  const row  = document.getElementById(`gpio-row-${pinNum}`);
+  const name = row?.querySelector('.gpio-pin-name')?.textContent?.trim() || `GPIO ${pinNum}`;
+  if (!confirm(`Remove "${name}" (GPIO ${pinNum})?`)) return;
   await fetch(`/api/gpio/pins/${pinNum}`, { method: "DELETE" });
   loadPins();
 }
