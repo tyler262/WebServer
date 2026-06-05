@@ -1,6 +1,9 @@
 # Database (contains user data — todos, suggestions)
 dashboard.db
 
+# Config (contains API keys — copy config.json.example and fill in values)
+config.json
+
 # Python
 __pycache__/
 *.pyc

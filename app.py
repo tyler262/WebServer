@@ -260,8 +260,22 @@ def system():
         return jsonify({"error": str(e)}), 500
 
 
+def _check_tv_key():
+    config = load_config()
+    required = config.get("tv_api_key", "")
+    if not required:
+        return None  # key not set — open (local-only use)
+    provided = request.headers.get("X-API-Key") or request.args.get("key")
+    if not provided or provided != required:
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
+
+
 @app.route("/api/tv/off/<int:tv_index>", methods=["POST"])
 def tv_off(tv_index):
+    err = _check_tv_key()
+    if err:
+        return err
     config = load_config()
     tvs = config.get("tvs", [])
     if not (0 <= tv_index < len(tvs)):

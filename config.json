@@ -37,6 +37,7 @@
       "ip": "192.168.1.101"
     }
   ],
+  "tv_api_key": "",
   "pihole": {
     "host": "localhost",
     "api_key": ""
