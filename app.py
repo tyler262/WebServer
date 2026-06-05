@@ -36,8 +36,9 @@ app = Flask(__name__)
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE  = os.path.join(BASE_DIR, "config.json")
 DB_FILE      = os.path.join(BASE_DIR, "dashboard.db")
-TW_DATA_FILE = os.path.join(BASE_DIR, "tribalwars", "tw_data.json")
-TW_DIR       = os.path.join(BASE_DIR, "tribalwars")
+TW_DATA_FILE      = os.path.join(BASE_DIR, "tribalwars", "tw_data.json")
+TW_SNAPSHOT_FILE  = os.path.join(BASE_DIR, "tribalwars", "snapshot.json")
+TW_DIR            = os.path.join(BASE_DIR, "tribalwars")
 
 
 # ── Database ───────────────────────────────────────────────────────────────────
@@ -1604,6 +1605,161 @@ def tw_data():
     if not os.path.exists(TW_DATA_FILE):
         return jsonify({"error": "No data yet — run sync.js first"}), 404
     with open(TW_DATA_FILE) as f:
+        return _tw_cors(jsonify(json.load(f)))
+
+
+def _generate_snapshot_md(data: dict) -> str:
+    player  = data.get("player_name", "?")
+    world   = data.get("world", "?")
+    snapped = data.get("snapped_at", "")[:19].replace("T", " ")
+    cfg     = data.get("world_config", {})
+    units   = data.get("unit_info", {})
+    villages = data.get("villages", [])
+    incomings = data.get("incomings", [])
+
+    ws = float(cfg.get("speed", 1))
+    us = float(cfg.get("unit_speed", 1))
+    night = cfg.get("night", {})
+    nc    = cfg.get("noble_coin_cost", {})
+
+    lines = [
+        f"# TW Snapshot — {player} · {world}",
+        f"_Generated: {snapped} UTC_",
+        "",
+        "## World Settings",
+        f"- Speed: **{ws}x**  ·  Unit speed: **{us}x**  ·  Effective movement: **{ws * us}x**",
+    ]
+
+    if night.get("active"):
+        lines.append(f"- Night bonus: {night.get('night_start', '?')}:00 – {night.get('night_end', '?')}:00 (defense doubled)")
+    else:
+        lines.append("- Night bonus: off")
+
+    lines.append(f"- Morale: {'on' if cfg.get('morale') else 'off'}")
+    lines.append(f"- Map size: {cfg.get('map_size', 1000)}×{cfg.get('map_size', 1000)}")
+    if nc:
+        lines.append(f"- Noble coin cost: {nc.get('wood',0):,} wood / {nc.get('stone',0):,} stone / {nc.get('iron',0):,} iron")
+        lines.append(f"- Max noble snipe distance: {cfg.get('noble_max_distance', '?')} tiles")
+
+    if units:
+        lines += [
+            "",
+            "## Unit Stats (this world)",
+            "Travel time = `(distance × base_min_per_tile) / (world_speed × unit_speed)`",
+            "",
+            "| Unit | Attack | Def/inf | Def/cav | Base min/tile | Actual min/tile | Carry | Pop |",
+            "|------|--------|---------|---------|---------------|-----------------|-------|-----|",
+        ]
+        for name, s in units.items():
+            base_speed = s.get("speed", "?")
+            try:
+                actual = round(float(base_speed) / (ws * us), 2)
+            except (TypeError, ValueError):
+                actual = "?"
+            lines.append(
+                f"| {name} | {s.get('attack','?')} | {s.get('defense','?')} | "
+                f"{s.get('defense_cavalry','?')} | {base_speed} | {actual} | "
+                f"{s.get('carry','?')} | {s.get('pop','?')} |"
+            )
+
+    # Villages
+    BLDG_LABEL = {
+        "main": "HQ", "barracks": "Barrack", "stable": "Stable",
+        "garage": "Workshop", "watchtower": "Tower", "snob": "Academy",
+        "smith": "Smithy", "place": "RallyPt", "statue": "Statue",
+        "market": "Market", "wood": "Timber", "stone": "Clay",
+        "iron": "Iron", "farm": "Farm", "storage": "Warehouse",
+        "hide": "Hideout", "wall": "Wall",
+    }
+    UNIT_LABEL = {
+        "spear": "Spear", "sword": "Sword", "axe": "Axe", "archer": "Arch",
+        "spy": "Scout", "light": "LC", "marcher": "MA", "heavy": "HC",
+        "ram": "Ram", "catapult": "Cat", "knight": "Pal", "snob": "Noble",
+    }
+
+    lines += ["", f"## My Villages ({len(villages)} total)"]
+    for v in villages:
+        lines.append(f"\n### {v.get('name','?')} ({v.get('x','?')}|{v.get('y','?')})")
+
+        blds = v.get("buildings", {})
+        if blds:
+            parts = [f"{BLDG_LABEL.get(k, k)} {n}" for k, n in sorted(blds.items()) if n]
+            lines.append("- **Buildings:** " + "  ·  ".join(parts))
+
+        res = v.get("research", {})
+        if res:
+            parts = [f"{UNIT_LABEL.get(k, k)} {n}" for k, n in sorted(res.items()) if n]
+            lines.append("- **Research:** " + "  ·  ".join(parts))
+
+        troops = v.get("troops", {})
+        if troops:
+            parts = [f"{UNIT_LABEL.get(k, k)} {n:,}" for k, n in sorted(troops.items()) if n]
+            lines.append("- **At home:** " + "  ·  ".join(parts))
+        elif blds:
+            lines.append("- **At home:** none (or away)")
+
+    # Incomings
+    lines += ["", f"## Incoming Attacks ({len(incomings)})"]
+    if incomings:
+        lines += [
+            "| Type | From (coord) | → Target | Arrives |",
+            "|------|-------------|---------|---------|",
+        ]
+        for inc in incomings:
+            lines.append(
+                f"| {inc.get('type','?')} | {inc.get('from_coord','?')} "
+                f"| {inc.get('to_name','?')} | {inc.get('arrives','?')} |"
+            )
+    else:
+        lines.append("_No incoming attacks at time of snapshot._")
+
+    lines += ["", "---", ""]
+    return "\n".join(lines)
+
+
+@app.route("/api/tw/snapshot", methods=["POST", "OPTIONS"])
+def tw_snapshot_post():
+    if request.method == "OPTIONS":
+        return _tw_cors(app.make_default_options_response())
+
+    data = request.get_json(silent=True)
+    if not data:
+        return _tw_cors(jsonify({"error": "No JSON body"})), 400
+
+    os.makedirs(TW_DIR, exist_ok=True)
+    with open(TW_SNAPSHOT_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+    snap_path = os.path.join(TW_DIR, "SNAPSHOT.md")
+    md = _generate_snapshot_md(data)
+
+    # Preserve any Notes section the user added manually
+    if os.path.exists(snap_path):
+        with open(snap_path) as f:
+            existing = f.read()
+        if "## Notes" in existing:
+            notes_block = existing[existing.index("## Notes"):]
+            md = md.rstrip() + "\n\n" + notes_block.strip() + "\n"
+        else:
+            md += "## Notes\n\n_Add strategy notes, war targets, and diplomacy here._\n_This section survives re-runs._\n"
+    else:
+        md += "## Notes\n\n_Add strategy notes, war targets, and diplomacy here._\n_This section survives re-runs._\n"
+
+    with open(snap_path, "w") as f:
+        f.write(md)
+
+    return _tw_cors(jsonify({
+        "ok": True,
+        "villages": len(data.get("villages", [])),
+        "incomings": len(data.get("incomings", [])),
+    }))
+
+
+@app.route("/api/tw/snapshot", methods=["GET"])
+def tw_snapshot_get():
+    if not os.path.exists(TW_SNAPSHOT_FILE):
+        return jsonify({"error": "No snapshot yet — run snapshot.js first"}), 404
+    with open(TW_SNAPSHOT_FILE) as f:
         return _tw_cors(jsonify(json.load(f)))
 
 
