@@ -6,12 +6,11 @@
 // Collects:
 //   • World config (speed, unit_speed, morale, night bonus, map size, noble costs)
 //   • Unit stats for THIS world  (attack, defense, speed, carry, pop)
-//   • All-village troops overview  (what you have at home)
-//   • All-village building levels  (barracks/stable/workshop/farm/…)
-//   • All-village training queues  (units currently being trained)
-//   • Incoming attacks             (arrival time, from, target)
-//   • Returning troops             (your own troops on their way home)
-//   • ODA + ODD rankings           (offensive/defensive points per player)
+//   • All villages: troops at home, building levels, training queues
+//   • Incoming attacks (all pages, arrival time, from coords)
+//   • Returning troops (separated from enemy incomings)
+//   • Outgoing commands (attacks/supports in motion)
+//   • ODA + ODD rankings (offensive/defensive points per player)
 //
 // Sends to Pi → writes tribalwars/SNAPSHOT.md (AI-readable summary)
 // and tribalwars/snapshot.json (raw data).
@@ -29,11 +28,9 @@
   const myVid  = game_data.village.id;
   const base   = `https://${world}.tribalwars.net`;
 
-  // Building alt-text → identifier map (CDN-agnostic, alt is always reliable)
+  // Building alt-text → internal identifier (CDN-agnostic)
   const BLDG_ALT = {
-    // Headquarters
     'headquarters': 'main', 'main building': 'main', 'hq': 'main', 'main': 'main',
-    // Military
     'barracks': 'barracks',
     'stable': 'stable', 'stables': 'stable',
     'workshop': 'garage', 'garage': 'garage',
@@ -42,7 +39,6 @@
     'smithy': 'smith', 'smith': 'smith',
     'rally point': 'place', 'rallypoint': 'place',
     'statue': 'statue', 'paladin statue': 'statue', 'paladin': 'statue',
-    // Economy
     'market': 'market',
     'timber camp': 'wood', 'lumber camp': 'wood', 'wood': 'wood',
     'clay pit': 'stone', 'clay': 'stone', 'stone': 'stone',
@@ -52,6 +48,13 @@
     'hiding place': 'hide', 'hideout': 'hide', 'hide': 'hide',
     'wall': 'wall',
   };
+  const KNOWN_BLDG = new Set([
+    'main','barracks','stable','garage','watchtower','snob','smith',
+    'place','statue','market','wood','stone','iron','farm','storage','hide','wall',
+  ]);
+
+  // 100ms delay between pages to avoid rate-limiting
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   // ── Loading toast ─────────────────────────────────────────────────────────
   const $t = $('<div>').css({
@@ -59,13 +62,13 @@
     background: '#1a1a1a', color: '#fff', padding: '12px 20px',
     borderRadius: '6px', zIndex: 99999, fontFamily: 'Verdana,sans-serif',
     fontSize: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-    minWidth: '270px', lineHeight: '1.6',
+    minWidth: '300px', lineHeight: '1.6',
   }).appendTo('body');
   const step = s => $t.html(s);
 
   try {
 
-    // ── 1. World config + unit stats (public, no auth needed) ─────────────
+    // ── 1. World config + unit stats (public, no auth) ─────────────────────
     step('📊 <b>[1/5]</b> World config + unit stats…');
     const [configXml, unitXml] = await Promise.all([
       fetch(`${base}/interface.php?func=get_config`).then(r => r.text()),
@@ -74,46 +77,41 @@
     const worldConfig = parseWorldConfig(configXml);
     const unitInfo    = parseUnitInfo(unitXml);
 
-    // ── 2. All-village overviews (troops + buildings + training queue) ─────
-    step('📊 <b>[2/5]</b> Village overviews…');
-    const [troopsHtml, buildingsHtml, trainingHtml] = await Promise.all([
-      fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=troops&type=all&page=-1`).then(r => r.text()),
-      fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=buildings&page=-1`).then(r => r.text()),
-      fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=units&page=-1`).then(r => r.text()),
+    // ── 2. All-village overviews (troops + buildings + training queue) ──────
+    // Uses smart pagination: tries page=-1 first, falls back to page=0,1,2,...
+    step('📊 <b>[2/5]</b> Village overviews (all pages)…');
+    const [troopsRows, buildingRows, trainingRows] = await Promise.all([
+      fetchAllRows(base, myVid, 'troops',    'troops'),
+      fetchAllRows(base, myVid, 'buildings', 'buildings'),
+      fetchAllRows(base, myVid, 'units',     'training'),
     ]);
-    const troopsRows   = parseOverviewTable(troopsHtml,    'troops');
-    const buildingRows = parseOverviewTable(buildingsHtml, 'buildings');
-    const trainingRows = parseOverviewTable(trainingHtml,  'training');
-    const villages     = mergeVillages(troopsRows, buildingRows, trainingRows);
+    const villages = mergeVillages(troopsRows, buildingRows, trainingRows);
 
-    // ── 3. Incomings + outgoing commands (fetch in parallel) ─────────────
-    step('📊 <b>[3/5]</b> Incoming attacks + outgoing commands…');
-    let incomings = [], returning = [], outgoing = [];
+    // ── 3. Incomings (explicit page=0,1,2... — page=-1 is AJAX-lazy on some servers)
+    step('📊 <b>[3/5]</b> Incoming attacks…');
+    let incomings = [], returning = [];
     try {
-      const [incomingHtml, commandsHtml] = await Promise.all([
-        fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=incomings&page=-1`).then(r => r.text()),
-        fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=commands&page=-1`).then(r => r.text()),
-      ]);
-      const all = parseIncomings(incomingHtml);
+      const all = await fetchAllIncomings(base, myVid);
       incomings = all.filter(r => !r.is_return);
       returning = all.filter(r =>  r.is_return);
-      outgoing  = parseOutgoing(commandsHtml);
     } catch (e) {
-      console.warn('[TW Snapshot] incomings/outgoing fetch failed:', e.message);
+      console.warn('[TW Snapshot] incomings failed:', e.message);
     }
 
-    // ── 4. ODA + ODD kill rankings (public) ───────────────────────────────
-    step('📊 <b>[4/5]</b> OD rankings…');
-    let odRankings = { attack: {}, defense: {} };
+    // ── 4. Outgoing commands + OD rankings ───────────────────────────────────
+    step('📊 <b>[4/5]</b> Outgoing commands + OD rankings…');
+    let outgoing = [], odRankings = { attack: {}, defense: {} };
     try {
-      const [odaText, oddText] = await Promise.all([
+      const [commandsHtml, odaText, oddText] = await Promise.all([
+        fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=commands&page=-1`).then(r => r.text()),
         fetch(`${base}/map/kill_att.txt`).then(r => r.text()),
         fetch(`${base}/map/kill_def.txt`).then(r => r.text()),
       ]);
+      outgoing           = parseOutgoing(commandsHtml);
       odRankings.attack  = parseOdCsv(odaText);
       odRankings.defense = parseOdCsv(oddText);
     } catch (e) {
-      console.warn('[TW Snapshot] OD rankings fetch failed:', e.message);
+      console.warn('[TW Snapshot] outgoing/OD failed:', e.message);
     }
 
     // ── 5. POST to Pi ─────────────────────────────────────────────────────
@@ -131,6 +129,11 @@
       returning,
       outgoing,
       od_rankings:  odRankings,
+      _meta: {
+        troops_villages:   troopsRows.length,
+        building_villages: buildingRows.length,
+        training_villages: trainingRows.length,
+      },
     };
 
     const res = await fetch(`${PI_URL}/api/tw/snapshot`, {
@@ -146,7 +149,7 @@
         `✓ Snapshot saved!\n\n` +
         `Player:    ${game_data.player.name}\n` +
         `World:     ${world}\n` +
-        `Villages:  ${villages.length}\n` +
+        `Villages:  ${villages.length}  (troops: ${troopsRows.length}, bldgs: ${buildingRows.length}, training: ${trainingRows.length})\n` +
         `Incomings: ${incomings.length} enemy attack(s)\n` +
         `Returning: ${returning.length} movement(s)\n` +
         `Outgoing:  ${outgoing.length} command(s)\n\n` +
@@ -160,7 +163,85 @@
   } catch (e) {
     $t.text('✗ Error: ' + e.message);
     console.error('[TW Snapshot]', e);
-    setTimeout(() => $t.remove(), 6000);
+    setTimeout(() => $t.remove(), 8000);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Fetch helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Fetch an overview_villages mode with automatic pagination.
+  // Tries page=-1 first; if the response contains pagination links, paginates manually.
+  async function fetchAllRows(base, myVid, mode, parseMode) {
+    const makeUrl = p =>
+      `${base}/game.php?village=${myVid}&screen=overview_villages&mode=${mode}&page=${p}`;
+
+    // Attempt page=-1 (returns everything on most TW servers)
+    const html0 = await fetch(makeUrl(-1)).then(r => r.text());
+    const rows0 = parseOverviewTable(html0, parseMode);
+
+    // If we got rows and there are no numbered page navigation links, page=-1 worked
+    const doc0    = new DOMParser().parseFromString(html0, 'text/html');
+    const hasMore = doc0.querySelector('a[href*="screen=overview_villages"][href*="page=1"]') != null
+                 || doc0.querySelector('.paged-nav-item a[href*="page="]') != null;
+
+    if (rows0.length > 0 && !hasMore) {
+      return rows0;
+    }
+
+    // page=-1 didn't return everything — paginate manually
+    const allRows = [];
+    const seen    = new Set();
+
+    for (let page = 0; ; page++) {
+      const html     = await fetch(makeUrl(page)).then(r => r.text());
+      const pageRows = parseOverviewTable(html, parseMode);
+
+      // Break if this page returned no village rows
+      if (!pageRows.length) break;
+
+      // Add non-duplicate rows
+      let added = 0;
+      for (const r of pageRows) {
+        if (!seen.has(r.vid)) { seen.add(r.vid); allRows.push(r); added++; }
+      }
+
+      // No new rows means we've wrapped around (shouldn't happen but be safe)
+      if (!added) break;
+
+      // Check if there's a next page link
+      const doc      = new DOMParser().parseFromString(html, 'text/html');
+      const nextPage = doc.querySelector(`a[href*="page=${page + 1}"]`);
+      if (!nextPage) break;
+
+      await sleep(100);
+    }
+
+    return allRows;
+  }
+
+  // Fetch all incomings using explicit page numbers (page=-1 returns empty table on some servers
+  // because TW's CommandsOverview JS lazy-loads the data; explicit pages get server-rendered HTML).
+  async function fetchAllIncomings(base, myVid) {
+    const rows = [];
+    for (let page = 0; ; page++) {
+      const html = await fetch(
+        `${base}/game.php?village=${myVid}&screen=overview_villages&mode=incomings&page=${page}`
+      ).then(r => r.text());
+
+      const doc   = new DOMParser().parseFromString(html, 'text/html');
+      const table = doc.querySelector('#incomings_table, #incomings_list');
+      if (!table) break;
+
+      const pageRows = parseIncomingsTable(table);
+      if (!pageRows.length) break;
+      rows.push(...pageRows);
+
+      const nextLink = doc.querySelector(`a[href*="page=${page + 1}"]`);
+      if (!nextLink) break;
+      await sleep(100);
+    }
+    return rows;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -171,10 +252,7 @@
     const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
     const get = (...path) => {
       let node = doc.documentElement;
-      for (const tag of path) {
-        node = node.querySelector(tag);
-        if (!node) return null;
-      }
+      for (const tag of path) { node = node.querySelector(tag); if (!node) return null; }
       return node.textContent.trim() || null;
     };
     return {
@@ -211,17 +289,16 @@
     return units;
   }
 
-  // Parses any overview_villages table: troops, buildings, or training queue.
+  // Parses overview_villages tables for troops, buildings, or training queue.
   // mode: 'troops' | 'buildings' | 'training'
   function parseOverviewTable(html, mode) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
-    // Try mode-specific table IDs first
+    // Try specific table IDs first
     const idMap = { troops: '#troops_list', buildings: '#buildings_list', training: '#units_list' };
     let table = doc.querySelector(idMap[mode] || '');
 
     // Fallback: find a table that has BOTH images in header AND village links in data rows
-    // (prevents accidentally grabbing nav tables or other unrelated tables)
     if (!table) {
       table = doc.querySelector('table.overview_table')
             || [...doc.querySelectorAll('table')].find(t => {
@@ -236,23 +313,16 @@
     const hrow = table.querySelector('thead tr') || table.querySelector('tr');
     if (!hrow) return [];
 
-    // Known building filename stems — used as last-resort key extraction
-    const KNOWN_BLDG_NAMES = new Set([
-      'main','barracks','stable','garage','watchtower','snob','smith',
-      'place','statue','market','wood','stone','iron','farm','storage','hide','wall',
-    ]);
-
-    // Build column key list from header images
+    // Identify column keys from header images
     const cols = [];
     [...hrow.querySelectorAll('th, td')].forEach((th, i) => {
       const img = th.querySelector('img');
       if (!img) return;
-      const src  = img.getAttribute('src') || '';
-      // Try all text sources: alt, title, data-title, data-tooltip
-      const alt  = (img.getAttribute('alt') ||
-                    img.getAttribute('title') ||
-                    img.getAttribute('data-title') ||
-                    img.getAttribute('data-tooltip') || '').toLowerCase().trim();
+      const src = img.getAttribute('src') || '';
+      const alt = (img.getAttribute('alt') ||
+                   img.getAttribute('title') ||
+                   img.getAttribute('data-title') ||
+                   img.getAttribute('data-tooltip') || '').toLowerCase().trim();
 
       // unit_axe.png → "axe"
       const mUnit = src.match(/unit_(\w+)\./);
@@ -261,17 +331,13 @@
 
       let key = (mUnit || mBld)?.[1]?.toLowerCase() || null;
 
-      // Alt-text fallback with human-readable names (CDN-agnostic)
       if (!key && alt) {
-        key = BLDG_ALT[alt] || null;
-        // If still no match, check if the alt text itself is a known building stem
-        if (!key && KNOWN_BLDG_NAMES.has(alt)) key = alt;
+        key = BLDG_ALT[alt] || (KNOWN_BLDG.has(alt) ? alt : null);
       }
-
-      // Last resort: extract stem from image filename
+      // Last resort: stem of image filename
       if (!key) {
         const stem = src.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase();
-        if (KNOWN_BLDG_NAMES.has(stem)) key = stem;
+        if (KNOWN_BLDG.has(stem)) key = stem;
       }
 
       if (key) cols.push({ i, key });
@@ -287,9 +353,9 @@
       const coordMatch = cells[0]?.textContent?.match(/\((\d+)\|(\d+)\)/);
       if (!vidMatch) continue;
 
-      // Strip coord suffix from link text: "Village Name (580|476) K45" → "Village Name"
+      // Strip coord suffix: "Village Name (580|476) K45" → "Village Name"
       const rawName = link?.textContent?.trim() || '?';
-      const name = rawName.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
+      const name    = rawName.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
 
       const data = {};
       cols.forEach(({ i, key }) => {
@@ -309,7 +375,7 @@
     return rows;
   }
 
-  // Merge troops / buildings / training_queue rows into per-village objects
+  // Merge troops / buildings / training_queue into per-village objects
   function mergeVillages(troops, buildings, training) {
     const map = {};
     const set = (vid, name, x, y) => {
@@ -321,47 +387,44 @@
     return Object.values(map);
   }
 
-  function parseIncomings(html) {
-    const doc   = new DOMParser().parseFromString(html, 'text/html');
-    const rows  = [];
+  // Parse rows from an already-located incomings table element.
+  // Uses link-finding (not fixed cell positions) since TW column order varies.
+  function parseIncomingsTable(table) {
+    const rows = [];
+    for (const row of table.querySelectorAll('tr')) {
+      // Skip header rows (no village links)
+      const vilLinks = [...row.querySelectorAll('a[href*="village="]')];
+      if (!vilLinks.length) continue;
 
-    // Only use the known specific table IDs — never fall through to nav tables.
-    // If #incomings_table doesn't exist or is empty, there are simply no incomings.
-    const table = doc.querySelector('#incomings_table, #incomings_list');
-    if (!table) return rows;
+      // First link = attacker's village, last link = your target village
+      const fromLink = vilLinks[0];
+      const toLink   = vilLinks[vilLinks.length - 1] !== vilLinks[0] ? vilLinks[vilLinks.length - 1] : null;
 
-    for (const row of table.querySelectorAll('tbody tr')) {
-      const cells = [...row.querySelectorAll('td')];
-      if (cells.length < 3) continue;
+      const fromVid   = fromLink.getAttribute('href').match(/village=(\d+)/)?.[1];
+      const fromRaw   = fromLink.textContent.trim();
+      const fromName  = fromRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim() || '?';
+      const fromCoord = fromRaw.match(/\((\d+)\|(\d+)\)/);
 
-      // Row class "return" = your own troops coming home, not an attack
-      const typeImg = cells[0]?.querySelector('img');
+      const toVid   = toLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
+      const toRaw   = toLink?.textContent?.trim() || '';
+      const toName  = toRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim() || '?';
+
+      // Type icon: look for an img in the row
+      const typeImg = row.querySelector('td img');
       const typeAlt = (typeImg?.getAttribute('alt') || typeImg?.getAttribute('title') || '').toLowerCase();
+      const type    = typeImg?.getAttribute('title') || typeImg?.getAttribute('alt') || '?';
+
       const isReturn = row.classList.contains('return') ||
                        typeAlt.includes('return') ||
-                       (cells[0]?.textContent || '').toLowerCase().trim().startsWith('return');
+                       (row.querySelector('td')?.textContent || '').toLowerCase().trim().startsWith('return');
+      const isNoble  = typeAlt.includes('snob') || typeAlt.includes('noble');
 
-      const type = typeImg?.getAttribute('title') || typeImg?.getAttribute('alt')
-                 || cells[0]?.textContent?.trim() || '?';
-
-      // Noble detection: nobleman attacks have a different icon alt text
-      const isNoble = typeAlt.includes('snob') || typeAlt.includes('noble');
-
-      const fromCell  = cells[1];
-      const fromCoord = fromCell?.textContent?.match(/\((\d+)\|(\d+)\)/);
-      const fromLink  = fromCell?.querySelector('a[href*="village="]');
-      const fromVid   = fromLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
-
-      const toCell = cells[2];
-      const toLink = toCell?.querySelector('a[href*="village="]');
-      const toVid  = toLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
-      const toRaw  = toLink?.textContent?.trim() || toCell?.textContent?.match(/[^()]+/)?.[0]?.trim() || '?';
-      const toName = toRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
-
-      // Arrival time — grab Unix timestamp from TW's countdown element if available
-      const timeCell = cells[3];
-      const countdownEl = timeCell?.querySelector('[data-endtime]');
+      // Arrival time: prefer data-endtime, then look for time text
+      const countdownEl = row.querySelector('[data-endtime]');
       const arrives_ts  = countdownEl ? parseInt(countdownEl.getAttribute('data-endtime')) || null : null;
+      const cells       = [...row.querySelectorAll('td')];
+      const timeCell    = cells.find(c => /today at|tomorrow at|on \d{2}\.\d{2}\./.test(c.textContent))
+                       || countdownEl?.closest('td');
       const arrives     = timeCell?.textContent?.trim().replace(/\s+/g, ' ') || '?';
 
       rows.push({
@@ -369,9 +432,9 @@
         is_return:  isReturn,
         is_noble:   isNoble,
         arrives_ts,
-        from_vid:   fromVid ? parseInt(fromVid) : null,
+        from_vid:   fromVid   ? parseInt(fromVid)   : null,
         from_coord: fromCoord ? `${fromCoord[1]}|${fromCoord[2]}` : null,
-        to_vid:     toVid ? parseInt(toVid) : null,
+        to_vid:     toVid     ? parseInt(toVid)     : null,
         to_name:    toName,
         arrives,
       });
@@ -379,14 +442,12 @@
     return rows;
   }
 
-  // Parses outgoing commands (overview_villages&mode=commands).
-  // Shows your attacks/supports currently in motion across all villages.
-  // Does NOT assume fixed cell positions — TW's column layout varies by server version.
+  // Parse outgoing commands.
+  // In TW's commands table, first village link = destination (target), second = source (your village).
   function parseOutgoing(html) {
     const doc  = new DOMParser().parseFromString(html, 'text/html');
     const rows = [];
 
-    // Find the commands table by ID first, then by "has village links in data rows"
     const table = doc.querySelector('#commands_table, #commands_list, #outgoing_table')
                 || [...doc.querySelectorAll('table')].find(t =>
                      t.querySelector('tbody tr td a[href*="village="]')
@@ -394,40 +455,48 @@
     if (!table) return rows;
 
     for (const row of table.querySelectorAll('tbody tr')) {
-      // Collect every village link in the row — first = from, second = to
       const vilLinks = [...row.querySelectorAll('a[href*="village="]')];
       if (!vilLinks.length) continue;
 
-      const fromLink = vilLinks[0];
-      const toLink   = vilLinks.length > 1 ? vilLinks[1] : null;
+      // TW commands table: first link = destination (enemy/barb village)
+      //                    second link = source (your village)
+      const toLink   = vilLinks[0];
+      const fromLink = vilLinks.length > 1 ? vilLinks[1] : null;
 
-      const fromVid   = fromLink.getAttribute('href').match(/village=(\d+)/)?.[1];
-      const fromRaw   = fromLink.textContent.trim();
-      const fromName  = fromRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim() || fromVid || '?';
-      const fromCoord = fromRaw.match(/\((\d+)\|(\d+)\)/);
-
-      const toVid   = toLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
-      const toRaw   = toLink?.textContent?.trim() || '';
+      const toVid   = toLink.getAttribute('href').match(/village=(\d+)/)?.[1];
+      const toRaw   = toLink.textContent.trim();
       const toName  = toRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim() || toVid || '?';
       const toCoord = toRaw.match(/\((\d+)\|(\d+)\)/);
 
-      // Type from the first image in the row
+      const fromVid   = fromLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
+      const fromRaw   = fromLink?.textContent?.trim() || '';
+      const fromName  = fromRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim() || fromVid || '?';
+      const fromCoord = fromRaw.match(/\((\d+)\|(\d+)\)/);
+
+      // Command type from icon
       const typeImg = row.querySelector('td img');
       const typeAlt = (typeImg?.getAttribute('alt') || typeImg?.getAttribute('title') || '').toLowerCase();
       const type    = typeImg?.getAttribute('title') || typeImg?.getAttribute('alt') || '?';
 
-      // Arrival time: prefer data-endtime countdown element; otherwise find by time pattern in text
+      // Also grab the action description text (e.g. "Attack on Barbarian village")
+      // from the cell that contains the first (destination) link
+      const descCell = toLink.closest('td');
+      const desc     = descCell?.textContent?.trim().replace(/\s+/g, ' ') || '';
+
+      // Arrival time
       const countdownEl = row.querySelector('[data-endtime]');
       const arrives_ts  = countdownEl ? parseInt(countdownEl.getAttribute('data-endtime')) || null : null;
       const cells       = [...row.querySelectorAll('td')];
       const timeCell    = cells.find(c => /today at|tomorrow at|on \d{2}\.\d{2}\./.test(c.textContent))
-                       || (countdownEl?.closest('td'));
+                       || countdownEl?.closest('td');
       const arrives     = timeCell?.textContent?.trim().replace(/\s+/g, ' ') || '?';
 
       rows.push({
         type,
+        desc,
         is_noble:   typeAlt.includes('snob') || typeAlt.includes('noble'),
-        is_return:  typeAlt.includes('return') || row.classList.contains('return'),
+        is_return:  typeAlt.includes('return') || row.classList.contains('return') ||
+                    desc.toLowerCase().includes('return'),
         arrives_ts,
         from_vid:   fromVid   ? parseInt(fromVid)   : null,
         from_name:  fromName,
