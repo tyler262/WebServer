@@ -1420,3 +1420,138 @@ select option { background: var(--card-bg); }
 }
 .serial-row:last-child { border-bottom: none; }
 .serial-port { font-size: 0.85rem; color: var(--accent); }
+
+/* ── TW War Room panel (Ctrl+Shift+T) ──────────────────────────────────────── */
+.tw-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 3000;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.tw-overlay.open { display: block; opacity: 1; }
+
+.tw-panel {
+  position: fixed;
+  top: 0;
+  right: -380px;
+  width: 360px;
+  max-width: 95vw;
+  height: 100vh;
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 12px;
+  z-index: 3001;
+  transition: right 0.25s cubic-bezier(0.4,0,0.2,1);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #30363d;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.7);
+}
+.tw-panel.open { right: 0; }
+
+.tw-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  background: #161b22;
+  border-bottom: 1px solid #21262d;
+  flex-shrink: 0;
+}
+.tw-panel-title {
+  font-size: 13px;
+  font-weight: bold;
+  color: #f0883e;
+  letter-spacing: 0.06em;
+}
+.tw-panel-close {
+  background: none;
+  border: none;
+  color: #6e7681;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+}
+.tw-panel-close:hover { color: #c9d1d9; }
+
+.tw-panel-body { flex: 1; overflow-y: auto; }
+
+.tw-loading {
+  padding: 16px 14px;
+  color: #6e7681;
+  font-size: 11px;
+}
+
+.tw-snapshot-bar {
+  padding: 8px 14px;
+  background: #161b22;
+  border-bottom: 1px solid #21262d;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+.tw-snap-ok   { color: #3fb950; }
+.tw-snap-warn { color: #d29922; }
+.tw-snap-meta { color: #6e7681; }
+
+.tw-scripts-list { padding: 4px 0; }
+
+.tw-script-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #21262d;
+}
+.tw-script-row:last-child { border-bottom: none; }
+
+.tw-script-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tw-script-name {
+  font-weight: bold;
+  color: #58a6ff;
+  font-size: 12px;
+}
+.tw-script-desc {
+  font-size: 10.5px;
+  color: #8b949e;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.tw-copy-btn {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.tw-copy-btn:hover  { background: #30363d; }
+.tw-copy-btn.copied { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+
+.tw-panel-footer {
+  padding: 7px 14px;
+  background: #161b22;
+  border-top: 1px solid #21262d;
+  font-size: 10px;
+  color: #484f58;
+  text-align: center;
+  flex-shrink: 0;
+}

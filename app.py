@@ -1576,6 +1576,37 @@ def _generate_tw_context(data: dict):
         f.write("\n".join(lines) + "\n")
 
 
+@app.route("/api/tw/scripts", methods=["GET"])
+def tw_scripts_list():
+    """Return name + description for every .js file in the tribalwars/ folder."""
+    result = []
+    if not os.path.isdir(TW_DIR):
+        return jsonify(result)
+    for fname in sorted(os.listdir(TW_DIR)):
+        if not fname.endswith(".js"):
+            continue
+        path = os.path.join(TW_DIR, fname)
+        desc = ""
+        try:
+            with open(path, encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    s = line.strip()
+                    if not s.startswith("//"):
+                        break
+                    text = s[2:].strip()
+                    if text and not text.startswith("─"):
+                        desc = text
+                        break
+        except Exception:
+            pass
+        result.append({
+            "name":        fname,
+            "desc":        desc or "—",
+            "bookmarklet": f"javascript:$.getScript('http://192.168.1.4:8888/tw/{fname}');",
+        })
+    return jsonify(result)
+
+
 @app.route("/api/tw/sync", methods=["POST", "OPTIONS"])
 def tw_sync():
     if request.method == "OPTIONS":

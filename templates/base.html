@@ -11,6 +11,17 @@
 
   <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
+  <!-- ⚔ TW War Room — open with Ctrl+Shift+T -->
+  <div id="tw-overlay" class="tw-overlay" onclick="closeTWPanel()"></div>
+  <div id="tw-panel" class="tw-panel">
+    <div class="tw-panel-header">
+      <span class="tw-panel-title">⚔ War Room</span>
+      <button class="tw-panel-close" onclick="closeTWPanel()">✕</button>
+    </div>
+    <div id="tw-panel-body" class="tw-panel-body"></div>
+    <div class="tw-panel-footer">Ctrl+Shift+T to toggle</div>
+  </div>
+
   <nav id="sidebar" class="sidebar">
     <div class="sidebar-header">
       <span>&#127968; Home Dashboard</span>
@@ -47,7 +58,13 @@
       document.getElementById('sidebar').classList.remove('open');
       document.getElementById('sidebar-overlay').classList.remove('visible');
     }
-    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeSidebar(); });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { closeSidebar(); closeTWPanel(); }
+      if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+        e.preventDefault();
+        document.getElementById('tw-panel').classList.contains('open') ? closeTWPanel() : openTWPanel();
+      }
+    });
 
     function updateClock() {
       const el = document.getElementById('clock');
@@ -76,6 +93,79 @@
     }
     updateClock();
     setInterval(updateClock, 1000);
+
+    // ── TW War Room ───────────────────────────────────────────────────────────
+    function openTWPanel() {
+      document.getElementById('tw-panel').classList.add('open');
+      document.getElementById('tw-overlay').classList.add('open');
+      loadTWPanel();
+    }
+    function closeTWPanel() {
+      document.getElementById('tw-panel').classList.remove('open');
+      document.getElementById('tw-overlay').classList.remove('open');
+    }
+
+    async function loadTWPanel() {
+      const body = document.getElementById('tw-panel-body');
+      body.innerHTML = '<div class="tw-loading">Loading…</div>';
+      try {
+        const [scripts, snap] = await Promise.all([
+          fetch('/api/tw/scripts').then(r => r.json()),
+          fetch('/api/tw/snapshot').then(r => r.json()).catch(() => null),
+        ]);
+
+        let html = '<div class="tw-snapshot-bar">';
+        if (snap && !snap.error) {
+          const when = (snap.snapped_at || '').slice(0, 16).replace('T', ' ');
+          html += `<span class="tw-snap-ok">● Last snapshot: ${escapeHtml(when)}</span>`;
+          html += `<span class="tw-snap-meta">${(snap.villages || []).length} village(s) &middot; ${(snap.incomings || []).length} incoming</span>`;
+        } else {
+          html += '<span class="tw-snap-warn">○ No snapshot &mdash; run snapshot.js first</span>';
+        }
+        html += '</div><div class="tw-scripts-list">';
+
+        for (const s of scripts) {
+          html += `
+            <div class="tw-script-row">
+              <div class="tw-script-info">
+                <span class="tw-script-name">${escapeHtml(s.name)}</span>
+                <span class="tw-script-desc">${escapeHtml(s.desc)}</span>
+              </div>
+              <button class="tw-copy-btn" data-bm="${escapeHtml(s.bookmarklet)}" onclick="copyTWLink(this)">Copy</button>
+            </div>`;
+        }
+        html += '</div>';
+        body.innerHTML = html;
+      } catch (e) {
+        body.innerHTML = `<p style="padding:14px;color:var(--danger)">Error: ${escapeHtml(e.message)}</p>`;
+      }
+    }
+
+    async function copyTWLink(btn) {
+      const text = btn.dataset.bm;
+      const copy = async () => {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = Object.assign(document.createElement('textarea'), {
+            value: text, style: 'position:fixed;opacity:0'
+          });
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+      };
+      try {
+        await copy();
+        btn.textContent = '✓ Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+      } catch {
+        btn.textContent = '✗ Failed';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+      }
+    }
   </script>
 
   {% block scripts %}{% endblock %}
