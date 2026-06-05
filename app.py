@@ -1586,6 +1586,7 @@ def tw_snapshot_text():
         content = f.read()
     return content, 200, {
         "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": "attachment; filename=SNAPSHOT.md",
         "Access-Control-Allow-Origin": "*",
     }
 
