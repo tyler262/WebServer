@@ -24,15 +24,12 @@
 
   <!-- Incomings -->
   <div class="card" id="tw-incomings-card" style="display:none">
-    <div class="card-title tw-danger-title">&#9888; Incoming Attacks <span id="tw-inc-count" class="tw-badge-danger"></span></div>
-    <div class="tw-table-wrap">
-      <table class="tw-table" id="tw-incomings-table">
-        <thead><tr>
-          <th>Type</th><th>From</th><th>&#8594; Your Village</th><th>Arrives</th>
-        </tr></thead>
-        <tbody id="tw-incomings-body"></tbody>
-      </table>
+    <div class="card-title tw-danger-title">
+      &#9888; Incoming Attacks
+      <span id="tw-inc-count" class="tw-badge-danger"></span>
+      <span id="tw-inc-next" class="tw-inc-next-label"></span>
     </div>
+    <div id="tw-incomings-list" class="tw-inc-list"></div>
   </div>
 
   <!-- World config + unit stats (collapsible) -->
@@ -127,29 +124,75 @@ async function loadTWPage() {
 
   // Status bar
   const when = (snap.snapped_at || '').slice(0,16).replace('T',' ');
-  const villages = snap.villages || [];
+  const villages  = snap.villages  || [];
   const incomings = snap.incomings || [];
   const returning = snap.returning || [];
+  const outgoing  = snap.outgoing  || [];
   document.getElementById('tw-status-text').innerHTML =
     `&#9989; Snapshot: <strong>${escapeHtml(when)}</strong> UTC &nbsp;&middot;&nbsp; ` +
     `${villages.length} village(s) &nbsp;&middot;&nbsp; ` +
     (incomings.length ? `<span class="tw-danger-txt">&#9888; ${incomings.length} incoming</span>` : '0 incoming') +
-    ` &nbsp;&middot;&nbsp; ${returning.length} returning`;
+    ` &nbsp;&middot;&nbsp; ${outgoing.length} outgoing`;
   document.getElementById('tw-status-text').className = 'tw-status-ok';
   document.getElementById('tw-status-actions').style.display = '';
 
-  // Incomings
+  // Build village lookup for defender cross-reference
+  const vmap = {};
+  for (const v of villages) vmap[v.vid] = v;
+
+  // Incomings — card layout
   if (incomings.length) {
-    const tbody = document.getElementById('tw-incomings-body');
-    tbody.innerHTML = incomings.map(inc => `
-      <tr>
-        <td>${escapeHtml(inc.type || '?')}</td>
-        <td class="tw-mono">${escapeHtml(inc.from_coord || '?')}</td>
-        <td>${escapeHtml(inc.to_name || '?')}</td>
-        <td class="tw-mono">${escapeHtml(inc.arrives || '?')}</td>
-      </tr>`).join('');
     document.getElementById('tw-inc-count').textContent = incomings.length;
+
+    // Sort by arrival timestamp (soonest first), unknowns last
+    const sorted = [...incomings].sort((a, b) =>
+      (a.arrives_ts || 9e9) - (b.arrives_ts || 9e9)
+    );
+
+    // "Next lands in" label for status
+    if (sorted[0]?.arrives_ts) {
+      const diff = sorted[0].arrives_ts * 1000 - Date.now();
+      if (diff > 0) {
+        const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000);
+        document.getElementById('tw-inc-next').textContent =
+          '— next in ' + (h > 0 ? `${h}h ${m}m` : `${m}m`);
+      }
+    }
+
+    document.getElementById('tw-incomings-list').innerHTML = sorted.map((inc, i) => {
+      const isNoble = inc.is_noble || (inc.type || '').toLowerCase().includes('noble') ||
+                      (inc.type || '').toLowerCase().includes('snob');
+
+      const defVillage = vmap[inc.to_vid];
+      const troops = defVillage?.troops || {};
+      const troopEntries = Object.entries(troops).filter(([,n]) => n > 0).sort(([a],[b]) => a.localeCompare(b));
+      const troopHtml = troopEntries.length
+        ? troopEntries.map(([k,n]) => `<span class="tw-pip">${UNIT_LABEL[k]||k} <b>${n.toLocaleString()}</b></span>`).join('')
+        : '<span class="tw-inc-no-def">&#9888; No troops at home!</span>';
+
+      const timerAttr = inc.arrives_ts ? ` data-ts="${inc.arrives_ts}"` : '';
+      const timerSpan = inc.arrives_ts ? `<span class="tw-countdown"${timerAttr}>…</span>` : '';
+
+      return `
+        <div class="tw-inc-card${i === 0 ? ' tw-inc-first' : ''}${isNoble ? ' tw-inc-noble-card' : ''}">
+          <div class="tw-inc-header">
+            <span class="tw-inc-num">${i === 0 ? 'NEXT' : '#' + (i+1)}</span>
+            ${isNoble ? '<span class="tw-noble-badge">&#9876; NOBLE</span>' : ''}
+            <span class="tw-inc-target">${escapeHtml(inc.to_name || '?')}</span>
+            <span class="tw-inc-time">${escapeHtml(inc.arrives || '?')} ${timerSpan}</span>
+          </div>
+          <div class="tw-inc-body">
+            <div class="tw-pip-row">
+              <span class="tw-pip-label">Defenders</span>
+              ${troopHtml}
+            </div>
+            ${inc.from_coord ? `<div class="tw-pip-row"><span class="tw-pip-label">From</span><span class="tw-mono">${escapeHtml(inc.from_coord)}</span></div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
     document.getElementById('tw-incomings-card').style.display = '';
+    startCountdowns();
   }
 
   // World config
@@ -219,6 +262,29 @@ async function loadTWPage() {
     }).join('');
     document.getElementById('tw-villages-card').style.display = '';
   }
+}
+
+let _countdownTimer = null;
+function startCountdowns() {
+  if (_countdownTimer) return;
+  function tick() {
+    const now = Date.now();
+    document.querySelectorAll('.tw-countdown[data-ts]').forEach(el => {
+      const diff = parseInt(el.dataset.ts) * 1000 - now;
+      if (diff <= 0) {
+        el.textContent = '(landing now)';
+        el.style.color = 'var(--danger)';
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      el.textContent = h > 0 ? `(${h}h ${m}m)` : m > 0 ? `(${m}m ${s}s)` : `(${s}s)`;
+      el.style.color = diff < 3600000 ? 'var(--danger)' : diff < 10800000 ? 'var(--warning)' : 'var(--muted)';
+    });
+  }
+  tick();
+  _countdownTimer = setInterval(tick, 1000);
 }
 
 async function twCopy(btn) {

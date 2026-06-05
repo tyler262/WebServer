@@ -1663,6 +1663,7 @@ def _generate_snapshot_md(data: dict) -> str:
     villages  = data.get("villages", [])
     incomings = data.get("incomings", [])
     returning = data.get("returning", [])
+    outgoing  = data.get("outgoing", [])
 
     ws    = float(cfg.get("speed", 1))
     us    = float(cfg.get("unit_speed", 1))
@@ -1763,6 +1764,23 @@ def _generate_snapshot_md(data: dict) -> str:
             )
     else:
         lines.append("_No incoming attacks at time of snapshot._")
+
+    # Outgoing commands
+    if outgoing:
+        noble_out = [o for o in outgoing if o.get("is_noble")]
+        lines += ["", f"## Outgoing Commands ({len(outgoing)})"]
+        if noble_out:
+            lines.append(f"⚠ **{len(noble_out)} noble train(s) in motion**")
+        lines += [
+            "| Type | From | → Target | Arrives |",
+            "|------|------|---------|---------|",
+        ]
+        for cmd in outgoing:
+            noble_flag = " ⚔Noble" if cmd.get("is_noble") else ""
+            lines.append(
+                f"| {cmd.get('type','?')}{noble_flag} | {cmd.get('from_name','?')} "
+                f"| {cmd.get('to_name','?')} ({cmd.get('to_coord','?')}) | {cmd.get('arrives','?')} |"
+            )
 
     # Own troops returning home
     if returning:
@@ -1885,6 +1903,7 @@ def tw_snapshot_post():
         "villages":  len(data.get("villages", [])),
         "incomings": len(data.get("incomings", [])),
         "returning": len(data.get("returning", [])),
+        "outgoing":  len(data.get("outgoing", [])),
     }))
 
 

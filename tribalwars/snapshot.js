@@ -83,18 +83,20 @@
     const trainingRows = parseOverviewTable(trainingHtml,  'training');
     const villages     = mergeVillages(troopsRows, buildingRows, trainingRows);
 
-    // ── 3. Incomings ──────────────────────────────────────────────────────
-    step('📊 <b>[3/5]</b> Incoming attacks…');
-    let incomings = [], returning = [];
+    // ── 3. Incomings + outgoing commands (fetch in parallel) ─────────────
+    step('📊 <b>[3/5]</b> Incoming attacks + outgoing commands…');
+    let incomings = [], returning = [], outgoing = [];
     try {
-      const incomingHtml = await fetch(
-        `${base}/game.php?village=${myVid}&screen=overview_villages&mode=incomings&page=-1`
-      ).then(r => r.text());
+      const [incomingHtml, commandsHtml] = await Promise.all([
+        fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=incomings&page=-1`).then(r => r.text()),
+        fetch(`${base}/game.php?village=${myVid}&screen=overview_villages&mode=commands&page=-1`).then(r => r.text()),
+      ]);
       const all = parseIncomings(incomingHtml);
       incomings = all.filter(r => !r.is_return);
       returning = all.filter(r =>  r.is_return);
+      outgoing  = parseOutgoing(commandsHtml);
     } catch (e) {
-      console.warn('[TW Snapshot] incomings parse failed:', e.message);
+      console.warn('[TW Snapshot] incomings/outgoing fetch failed:', e.message);
     }
 
     // ── 4. ODA + ODD kill rankings (public) ───────────────────────────────
@@ -124,6 +126,7 @@
       villages,
       incomings,
       returning,
+      outgoing,
       od_rankings:  odRankings,
     };
 
@@ -142,7 +145,8 @@
         `World:     ${world}\n` +
         `Villages:  ${villages.length}\n` +
         `Incomings: ${incomings.length} enemy attack(s)\n` +
-        `Returning: ${returning.length} movement(s)\n\n` +
+        `Returning: ${returning.length} movement(s)\n` +
+        `Outgoing:  ${outgoing.length} command(s)\n\n` +
         `SNAPSHOT.md updated on Pi.`
       );
     } else {
@@ -316,6 +320,9 @@
       const type = typeImg?.getAttribute('title') || typeImg?.getAttribute('alt')
                  || cells[0]?.textContent?.trim() || '?';
 
+      // Noble detection: nobleman attacks have a different icon alt text
+      const isNoble = typeAlt.includes('snob') || typeAlt.includes('noble');
+
       const fromCell  = cells[1];
       const fromCoord = fromCell?.textContent?.match(/\((\d+)\|(\d+)\)/);
       const fromLink  = fromCell?.querySelector('a[href*="village="]');
@@ -324,19 +331,82 @@
       const toCell = cells[2];
       const toLink = toCell?.querySelector('a[href*="village="]');
       const toVid  = toLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
-      // Strip coord suffix from target village name too
       const toRaw  = toLink?.textContent?.trim() || toCell?.textContent?.match(/[^()]+/)?.[0]?.trim() || '?';
       const toName = toRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
 
-      const arrives = cells[3]?.textContent?.trim().replace(/\s+/g, ' ') || '?';
+      // Arrival time — grab Unix timestamp from TW's countdown element if available
+      const timeCell = cells[3];
+      const countdownEl = timeCell?.querySelector('[data-endtime]');
+      const arrives_ts  = countdownEl ? parseInt(countdownEl.getAttribute('data-endtime')) || null : null;
+      const arrives     = timeCell?.textContent?.trim().replace(/\s+/g, ' ') || '?';
 
       rows.push({
         type,
         is_return:  isReturn,
+        is_noble:   isNoble,
+        arrives_ts,
         from_vid:   fromVid ? parseInt(fromVid) : null,
         from_coord: fromCoord ? `${fromCoord[1]}|${fromCoord[2]}` : null,
         to_vid:     toVid ? parseInt(toVid) : null,
         to_name:    toName,
+        arrives,
+      });
+    }
+    return rows;
+  }
+
+  // Parses outgoing commands (overview_villages&mode=commands).
+  // Shows your attacks/supports currently in motion across all villages.
+  function parseOutgoing(html) {
+    const doc  = new DOMParser().parseFromString(html, 'text/html');
+    const rows = [];
+
+    // TW may use various table IDs for the commands overview
+    const table = doc.querySelector('#commands_table, #commands_list, #outgoing_table')
+                || [...doc.querySelectorAll('table.vis, table')].find(t =>
+                     t.querySelector('tbody tr td a[href*="village="]')
+                   );
+    if (!table) return rows;
+
+    for (const row of table.querySelectorAll('tbody tr')) {
+      const cells = [...row.querySelectorAll('td')];
+      if (cells.length < 3) continue;
+
+      const typeImg = cells[0]?.querySelector('img');
+      const typeAlt = (typeImg?.getAttribute('alt') || typeImg?.getAttribute('title') || '').toLowerCase();
+      const isNoble  = typeAlt.includes('snob') || typeAlt.includes('noble');
+      const isReturn = typeAlt.includes('return') || row.classList.contains('return');
+      const type     = typeImg?.getAttribute('title') || typeImg?.getAttribute('alt') || '?';
+
+      // From village (cell 1)
+      const fromLink = cells[1]?.querySelector('a[href*="village="]');
+      const fromVid  = fromLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
+      const fromRaw  = fromLink?.textContent?.trim() || '?';
+      const fromName = fromRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
+
+      // To village (cell 2)
+      const toLink  = cells[2]?.querySelector('a[href*="village="]');
+      const toVid   = toLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
+      const toRaw   = toLink?.textContent?.trim() || cells[2]?.textContent?.trim() || '?';
+      const toName  = toRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
+      const toCoord = cells[2]?.textContent?.match(/\((\d+)\|(\d+)\)/);
+
+      // Arrival/return time — prefer data-endtime countdown if present
+      const timeCell    = cells[3] || cells[cells.length - 1];
+      const countdownEl = timeCell?.querySelector('[data-endtime]');
+      const arrives_ts  = countdownEl ? parseInt(countdownEl.getAttribute('data-endtime')) || null : null;
+      const arrives     = timeCell?.textContent?.trim().replace(/\s+/g, ' ') || '?';
+
+      rows.push({
+        type,
+        is_noble:  isNoble,
+        is_return: isReturn,
+        arrives_ts,
+        from_vid:  fromVid ? parseInt(fromVid) : null,
+        from_name: fromName,
+        to_vid:    toVid ? parseInt(toVid) : null,
+        to_name:   toName,
+        to_coord:  toCoord ? `${toCoord[1]}|${toCoord[2]}` : null,
         arrives,
       });
     }

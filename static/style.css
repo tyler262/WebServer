@@ -1735,3 +1735,75 @@ select option { background: var(--card-bg); }
   word-break: break-all;
   font-family: 'Cascadia Code', 'Fira Code', monospace;
 }
+
+/* ── Incoming attack cards ─────────────────────────────────────────────────── */
+.tw-inc-list { display: flex; flex-direction: column; gap: 0; }
+.tw-inc-next-label { font-size: 0.8rem; font-weight: 400; color: var(--warning); margin-left: 0.4rem; }
+
+.tw-inc-card {
+  border-bottom: 1px solid var(--card-border);
+  padding: 0.65rem 0.85rem;
+  transition: background 0.1s;
+}
+.tw-inc-card:last-child { border-bottom: none; }
+.tw-inc-card:hover { background: rgba(255,255,255,0.025); }
+
+.tw-inc-first {
+  background: rgba(248, 113, 113, 0.05);
+  border-left: 3px solid var(--danger);
+}
+.tw-inc-noble-card {
+  background: rgba(251, 191, 36, 0.05);
+  border-left: 3px solid var(--warning);
+}
+.tw-inc-first.tw-inc-noble-card { border-left-color: var(--warning); }
+
+.tw-inc-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+.tw-inc-num {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--danger);
+  min-width: 32px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.tw-noble-badge {
+  background: rgba(251,191,36,0.15);
+  color: var(--warning);
+  border: 1px solid rgba(251,191,36,0.3);
+  border-radius: 4px;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.tw-inc-target {
+  font-weight: 600;
+  font-size: 0.92rem;
+  flex: 1;
+}
+.tw-inc-time {
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tw-countdown {
+  margin-left: 0.3rem;
+  font-weight: 600;
+  transition: color 0.3s;
+}
+
+.tw-inc-body { display: flex; flex-direction: column; gap: 0.25rem; }
+.tw-inc-no-def {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
