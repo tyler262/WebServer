@@ -1576,6 +1576,20 @@ def _generate_tw_context(data: dict):
         f.write("\n".join(lines) + "\n")
 
 
+@app.route("/api/tw/snapshot/text", methods=["GET"])
+def tw_snapshot_text():
+    """Serve SNAPSHOT.md as plain text — easy to copy from a phone browser."""
+    snap_path = os.path.join(TW_DIR, "SNAPSHOT.md")
+    if not os.path.exists(snap_path):
+        return "No snapshot yet — run snapshot.js first.", 404, {"Content-Type": "text/plain; charset=utf-8"}
+    with open(snap_path, encoding="utf-8") as f:
+        content = f.read()
+    return content, 200, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+    }
+
+
 @app.route("/api/tw/scripts", methods=["GET"])
 def tw_scripts_list():
     """Return name + description for every .js file in the tribalwars/ folder."""

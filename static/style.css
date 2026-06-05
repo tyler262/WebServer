@@ -1499,6 +1499,8 @@ select option { background: var(--card-bg); }
 .tw-snap-ok   { color: #3fb950; }
 .tw-snap-warn { color: #d29922; }
 .tw-snap-meta { color: #6e7681; }
+.tw-raw-link  { color: #58a6ff; text-decoration: none; }
+.tw-raw-link:hover { text-decoration: underline; }
 
 .tw-scripts-list { padding: 4px 0; }
 

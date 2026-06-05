@@ -43,7 +43,7 @@
   <header>
     <button class="btn-hamburger" onclick="openSidebar()">&#9776;</button>
     <div class="header-title">{% block header_title %}&#127968; Home Dashboard{% endblock %}</div>
-    <div id="clock" class="header-clock"></div>
+    <div id="clock" class="header-clock" title="Long-press to open War Room"></div>
     {% block header_actions %}{% endblock %}
   </header>
 
@@ -94,7 +94,16 @@
     updateClock();
     setInterval(updateClock, 1000);
 
-    // ── TW War Room ───────────────────────────────────────────────────────────
+    // ── TW War Room — Ctrl+Shift+T on desktop, long-press clock on mobile ───────
+    (function() {
+      let _pressTimer = null;
+      const clock = document.getElementById('clock');
+      clock.addEventListener('pointerdown', function() {
+        _pressTimer = setTimeout(openTWPanel, 600);
+      });
+      clock.addEventListener('pointerup',   function() { clearTimeout(_pressTimer); });
+      clock.addEventListener('pointermove', function() { clearTimeout(_pressTimer); });
+    })();
     function openTWPanel() {
       document.getElementById('tw-panel').classList.add('open');
       document.getElementById('tw-overlay').classList.add('open');
@@ -118,7 +127,7 @@
         if (snap && !snap.error) {
           const when = (snap.snapped_at || '').slice(0, 16).replace('T', ' ');
           html += `<span class="tw-snap-ok">● Last snapshot: ${escapeHtml(when)}</span>`;
-          html += `<span class="tw-snap-meta">${(snap.villages || []).length} village(s) &middot; ${(snap.incomings || []).length} incoming</span>`;
+          html += `<span class="tw-snap-meta">${(snap.villages || []).length} village(s) &middot; ${(snap.incomings || []).length} incoming &middot; <a href="/api/tw/snapshot/text" target="_blank" class="tw-raw-link">view raw</a></span>`;
         } else {
           html += '<span class="tw-snap-warn">○ No snapshot &mdash; run snapshot.js first</span>';
         }
