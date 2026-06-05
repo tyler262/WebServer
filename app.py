@@ -1972,6 +1972,13 @@ def gpio_page():
     return render_template("gpio.html", page="gpio")
 
 
+# ── Tribal Wars ────────────────────────────────────────────────────────────────
+
+@app.route("/tw")
+def tw_page():
+    return render_template("tw.html", page="tw")
+
+
 @app.route("/api/gpio/pins", methods=["GET"])
 def get_gpio_pins():
     config = load_config()

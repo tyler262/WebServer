@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Tribal Wars — Dashboard{% endblock %}
+{% block header_title %}&#9876; Tribal Wars{% endblock %}
+
+{% block content %}
+<main class="tw-page">
+
+  <!-- Status bar -->
+  <div class="tw-status-bar" id="tw-status-bar">
+    <span id="tw-status-text" class="tw-status-loading">Loading snapshot…</span>
+    <div class="tw-status-actions" id="tw-status-actions" style="display:none">
+      <a href="/api/tw/snapshot/text" class="btn-sm" download>&#8659; SNAPSHOT.md</a>
+    </div>
+  </div>
+
+  <!-- Scripts (bookmarklet links) -->
+  <div class="card" id="tw-scripts-card" style="display:none">
+    <div class="card-title">&#128196; Scripts
+      <span class="card-subtitle">Click Copy, then paste into TW Edit Links → Target URL</span>
+    </div>
+    <div id="tw-scripts-list" class="tw-scripts-grid"></div>
+  </div>
+
+  <!-- Incomings -->
+  <div class="card" id="tw-incomings-card" style="display:none">
+    <div class="card-title tw-danger-title">&#9888; Incoming Attacks <span id="tw-inc-count" class="tw-badge-danger"></span></div>
+    <div class="tw-table-wrap">
+      <table class="tw-table" id="tw-incomings-table">
+        <thead><tr>
+          <th>Type</th><th>From</th><th>&#8594; Your Village</th><th>Arrives</th>
+        </tr></thead>
+        <tbody id="tw-incomings-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- World config + unit stats (collapsible) -->
+  <div class="card" id="tw-world-card" style="display:none">
+    <div class="card-title tw-collapsible" onclick="twToggle('tw-world-body')">
+      &#127758; World Config
+      <span class="tw-collapse-icon" id="tw-world-body-icon">&#9660;</span>
+    </div>
+    <div id="tw-world-body">
+      <div id="tw-world-cfg" class="tw-cfg-grid"></div>
+      <div class="tw-table-wrap" style="margin-top:1rem">
+        <table class="tw-table" id="tw-units-table">
+          <thead><tr>
+            <th>Unit</th><th>Atk</th><th>Def</th><th>Def/Cav</th>
+            <th>Base min/tile</th><th>Actual min/tile</th><th>Carry</th><th>Pop</th>
+          </tr></thead>
+          <tbody id="tw-units-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Villages -->
+  <div class="card" id="tw-villages-card" style="display:none">
+    <div class="card-title">&#127984; Villages <span id="tw-village-count" class="tw-badge"></span></div>
+    <div id="tw-villages-list"></div>
+  </div>
+
+  <!-- No snapshot yet -->
+  <div class="card" id="tw-no-snap" style="display:none">
+    <div class="tw-no-snap-msg">
+      <div class="tw-no-snap-icon">&#9876;</div>
+      <p>No snapshot yet.</p>
+      <p class="tw-muted">Run <code>snapshot.js</code> in Tribal Wars to populate this page.</p>
+      <p class="tw-muted">In-game: Edit Links → Add new link → paste the bookmarklet below.</p>
+      <code class="tw-bookmarklet-hint">javascript:$.getScript('http://192.168.1.4:8888/tw/snapshot.js');</code>
+    </div>
+  </div>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const UNIT_LABEL = {
+  spear:'Spear', sword:'Sword', axe:'Axe', archer:'Arch',
+  spy:'Scout', light:'LC', marcher:'MA', heavy:'HC',
+  ram:'Ram', catapult:'Cat', knight:'Pal', snob:'Noble',
+};
+const BLDG_LABEL = {
+  main:'HQ', barracks:'Barrack', stable:'Stable', garage:'Workshop',
+  watchtower:'Tower', snob:'Academy', smith:'Smithy', place:'RallyPt',
+  statue:'Statue', market:'Market', wood:'Timber', stone:'Clay',
+  iron:'Iron', farm:'Farm', storage:'Warehouse', hide:'Hideout', wall:'Wall',
+};
+
+function twToggle(id) {
+  const el = document.getElementById(id);
+  const icon = document.getElementById(id + '-icon');
+  const hidden = el.style.display === 'none';
+  el.style.display = hidden ? '' : 'none';
+  if (icon) icon.textContent = hidden ? '▼' : '▶';
+}
+
+async function loadTWPage() {
+  // Load scripts list in parallel with snapshot
+  const [snap, scripts] = await Promise.all([
+    fetch('/api/tw/snapshot').then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch('/api/tw/scripts').then(r => r.json()).catch(() => []),
+  ]);
+
+  // Scripts card
+  if (scripts.length) {
+    const grid = document.getElementById('tw-scripts-list');
+    grid.innerHTML = scripts.map(s => `
+      <div class="tw-script-row">
+        <div class="tw-script-info">
+          <span class="tw-script-name">${escapeHtml(s.name)}</span>
+          <span class="tw-script-desc">${escapeHtml(s.desc)}</span>
+        </div>
+        <button class="tw-copy-btn" data-bm="${escapeHtml(s.bookmarklet)}" onclick="twCopy(this)">Copy</button>
+      </div>`).join('');
+    document.getElementById('tw-scripts-card').style.display = '';
+  }
+
+  if (!snap || snap.error) {
+    document.getElementById('tw-status-text').textContent = 'No snapshot — run snapshot.js first';
+    document.getElementById('tw-status-text').className = 'tw-status-warn';
+    document.getElementById('tw-no-snap').style.display = '';
+    return;
+  }
+
+  // Status bar
+  const when = (snap.snapped_at || '').slice(0,16).replace('T',' ');
+  const villages = snap.villages || [];
+  const incomings = snap.incomings || [];
+  const returning = snap.returning || [];
+  document.getElementById('tw-status-text').innerHTML =
+    `&#9989; Snapshot: <strong>${escapeHtml(when)}</strong> UTC &nbsp;&middot;&nbsp; ` +
+    `${villages.length} village(s) &nbsp;&middot;&nbsp; ` +
+    (incomings.length ? `<span class="tw-danger-txt">&#9888; ${incomings.length} incoming</span>` : '0 incoming') +
+    ` &nbsp;&middot;&nbsp; ${returning.length} returning`;
+  document.getElementById('tw-status-text').className = 'tw-status-ok';
+  document.getElementById('tw-status-actions').style.display = '';
+
+  // Incomings
+  if (incomings.length) {
+    const tbody = document.getElementById('tw-incomings-body');
+    tbody.innerHTML = incomings.map(inc => `
+      <tr>
+        <td>${escapeHtml(inc.type || '?')}</td>
+        <td class="tw-mono">${escapeHtml(inc.from_coord || '?')}</td>
+        <td>${escapeHtml(inc.to_name || '?')}</td>
+        <td class="tw-mono">${escapeHtml(inc.arrives || '?')}</td>
+      </tr>`).join('');
+    document.getElementById('tw-inc-count').textContent = incomings.length;
+    document.getElementById('tw-incomings-card').style.display = '';
+  }
+
+  // World config
+  const cfg = snap.world_config || {};
+  const ws = cfg.speed || 1, us = cfg.unit_speed || 1;
+  const night = cfg.night || {};
+  const nc = cfg.noble_coin_cost || {};
+  const cfgItems = [
+    ['World speed', `${ws}x`],
+    ['Unit speed', `${us}x`],
+    ['Movement', `${+(ws * us).toFixed(2)}x effective`],
+    ['Night bonus', night.active ? `${night.start_hour}:00 – ${night.end_hour}:00` : 'Off'],
+    ['Morale', cfg.morale ? 'On' : 'Off'],
+    ['Map size', `${cfg.map_size || 1000}×${cfg.map_size || 1000}`],
+    ['Noble max dist', `${cfg.noble_max_distance || '?'} tiles`],
+  ];
+  if (nc.wood || nc.stone || nc.iron) {
+    cfgItems.push(['Noble coins', `${(nc.wood||0).toLocaleString()} W / ${(nc.stone||0).toLocaleString()} S / ${(nc.iron||0).toLocaleString()} I`]);
+  }
+  document.getElementById('tw-world-cfg').innerHTML =
+    cfgItems.map(([k,v]) => `<div class="tw-cfg-item"><span class="tw-cfg-key">${k}</span><span class="tw-cfg-val">${v}</span></div>`).join('');
+
+  // Unit stats table
+  const units = snap.unit_info || {};
+  const tbody2 = document.getElementById('tw-units-body');
+  tbody2.innerHTML = Object.entries(units).map(([name, s]) => {
+    const base = s.speed ?? '?';
+    const actual = base !== '?' ? +(base / (ws * us)).toFixed(2) : '?';
+    return `<tr>
+      <td>${escapeHtml(UNIT_LABEL[name] || name)}</td>
+      <td>${s.attack ?? '?'}</td><td>${s.defense ?? '?'}</td>
+      <td>${s.defense_cavalry ?? '?'}</td>
+      <td class="tw-mono">${base}</td><td class="tw-mono">${actual}</td>
+      <td>${s.carry ?? '?'}</td><td>${s.pop ?? '?'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tw-world-card').style.display = '';
+
+  // Villages
+  if (villages.length) {
+    document.getElementById('tw-village-count').textContent = villages.length;
+    document.getElementById('tw-villages-list').innerHTML = villages.map((v, i) => {
+      const blds = v.buildings || {}, troops = v.troops || {}, tq = v.training_queue || {};
+      const bldParts = Object.entries(blds)
+        .filter(([,n]) => n).sort(([a],[b]) => a.localeCompare(b))
+        .map(([k,n]) => `<span class="tw-pip">${BLDG_LABEL[k]||k} <b>${n}</b></span>`).join('');
+      const troopParts = Object.entries(troops)
+        .filter(([,n]) => n).sort(([a],[b]) => a.localeCompare(b))
+        .map(([k,n]) => `<span class="tw-pip">${UNIT_LABEL[k]||k} <b>${n.toLocaleString()}</b></span>`).join('');
+      const tqParts = Object.entries(tq)
+        .filter(([,n]) => n).sort(([a],[b]) => a.localeCompare(b))
+        .map(([k,n]) => `<span class="tw-pip tw-pip-train">${UNIT_LABEL[k]||k} <b>${n}</b></span>`).join('');
+      const bodyId = `twv-${i}`;
+      return `
+        <div class="tw-village">
+          <div class="tw-village-header tw-collapsible" onclick="twToggle('${bodyId}')">
+            <span class="tw-village-name">${escapeHtml(v.name || '?')}</span>
+            <span class="tw-village-coord tw-mono">(${v.x}|${v.y})</span>
+            <span class="tw-collapse-icon" id="${bodyId}-icon">&#9660;</span>
+          </div>
+          <div id="${bodyId}" class="tw-village-body">
+            ${bldParts  ? `<div class="tw-pip-row"><span class="tw-pip-label">Buildings</span>${bldParts}</div>` : ''}
+            ${troopParts? `<div class="tw-pip-row"><span class="tw-pip-label">At home</span>${troopParts}</div>` : '<div class="tw-pip-row tw-muted-row">No troops at home</div>'}
+            ${tqParts   ? `<div class="tw-pip-row"><span class="tw-pip-label">Training</span>${tqParts}</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+    document.getElementById('tw-villages-card').style.display = '';
+  }
+}
+
+async function twCopy(btn) {
+  const text = btn.dataset.bm;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = Object.assign(document.createElement('textarea'), { value: text, style: 'position:fixed;opacity:0' });
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    }
+    btn.textContent = '✓ Copied'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+  } catch {
+    btn.textContent = '✗ Failed';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+  }
+}
+
+loadTWPage();
+</script>
+{% endblock %}
