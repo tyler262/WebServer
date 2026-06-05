@@ -31,22 +31,25 @@
 
   // Building alt-text → identifier map (CDN-agnostic, alt is always reliable)
   const BLDG_ALT = {
-    'headquarters': 'main', 'main building': 'main',
+    // Headquarters
+    'headquarters': 'main', 'main building': 'main', 'hq': 'main', 'main': 'main',
+    // Military
     'barracks': 'barracks',
-    'stable': 'stable',
+    'stable': 'stable', 'stables': 'stable',
     'workshop': 'garage', 'garage': 'garage',
-    'watchtower': 'watchtower',
-    'academy': 'snob', 'noble residence': 'snob',
-    'smithy': 'smith',
-    'rally point': 'place',
-    'statue': 'statue', 'paladin': 'statue',
+    'watchtower': 'watchtower', 'watch tower': 'watchtower',
+    'academy': 'snob', 'noble residence': 'snob', 'nobleman residence': 'snob',
+    'smithy': 'smith', 'smith': 'smith',
+    'rally point': 'place', 'rallypoint': 'place',
+    'statue': 'statue', 'paladin statue': 'statue', 'paladin': 'statue',
+    // Economy
     'market': 'market',
-    'timber camp': 'wood', 'lumber camp': 'wood',
-    'clay pit': 'stone',
-    'iron mine': 'iron',
+    'timber camp': 'wood', 'lumber camp': 'wood', 'wood': 'wood',
+    'clay pit': 'stone', 'clay': 'stone', 'stone': 'stone',
+    'iron mine': 'iron', 'iron': 'iron',
     'farm': 'farm',
-    'warehouse': 'storage',
-    'hiding place': 'hide',
+    'warehouse': 'storage', 'storage': 'storage',
+    'hiding place': 'hide', 'hideout': 'hide', 'hide': 'hide',
     'wall': 'wall',
   };
 
@@ -213,14 +216,19 @@
   function parseOverviewTable(html, mode) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
-    // Try mode-specific table IDs, then generic fallback
+    // Try mode-specific table IDs first
     const idMap = { troops: '#troops_list', buildings: '#buildings_list', training: '#units_list' };
     let table = doc.querySelector(idMap[mode] || '');
+
+    // Fallback: find a table that has BOTH images in header AND village links in data rows
+    // (prevents accidentally grabbing nav tables or other unrelated tables)
     if (!table) {
       table = doc.querySelector('table.overview_table')
             || [...doc.querySelectorAll('table')].find(t => {
-                 const hrow = t.querySelector('thead tr') || t.querySelector('tr');
-                 return hrow && hrow.querySelector('img');
+                 const hrow = t.querySelector('thead tr, tr:first-child');
+                 if (!hrow || !hrow.querySelector('img')) return false;
+                 const dataRow = t.querySelector('tbody tr, tr:nth-child(2)');
+                 return dataRow?.querySelector('a[href*="village="]') != null;
                });
     }
     if (!table) return [];
@@ -228,13 +236,23 @@
     const hrow = table.querySelector('thead tr') || table.querySelector('tr');
     if (!hrow) return [];
 
+    // Known building filename stems — used as last-resort key extraction
+    const KNOWN_BLDG_NAMES = new Set([
+      'main','barracks','stable','garage','watchtower','snob','smith',
+      'place','statue','market','wood','stone','iron','farm','storage','hide','wall',
+    ]);
+
     // Build column key list from header images
     const cols = [];
     [...hrow.querySelectorAll('th, td')].forEach((th, i) => {
       const img = th.querySelector('img');
       if (!img) return;
-      const src = img.getAttribute('src') || '';
-      const alt = (img.getAttribute('alt') || img.getAttribute('title') || '').toLowerCase().trim();
+      const src  = img.getAttribute('src') || '';
+      // Try all text sources: alt, title, data-title, data-tooltip
+      const alt  = (img.getAttribute('alt') ||
+                    img.getAttribute('title') ||
+                    img.getAttribute('data-title') ||
+                    img.getAttribute('data-tooltip') || '').toLowerCase().trim();
 
       // unit_axe.png → "axe"
       const mUnit = src.match(/unit_(\w+)\./);
@@ -243,9 +261,17 @@
 
       let key = (mUnit || mBld)?.[1]?.toLowerCase() || null;
 
-      // Alt-text fallback (always reliable, CDN-agnostic)
+      // Alt-text fallback with human-readable names (CDN-agnostic)
       if (!key && alt) {
-        key = BLDG_ALT[alt] || alt.replace(/\s+/g, '_') || null;
+        key = BLDG_ALT[alt] || null;
+        // If still no match, check if the alt text itself is a known building stem
+        if (!key && KNOWN_BLDG_NAMES.has(alt)) key = alt;
+      }
+
+      // Last resort: extract stem from image filename
+      if (!key) {
+        const stem = src.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase();
+        if (KNOWN_BLDG_NAMES.has(stem)) key = stem;
       }
 
       if (key) cols.push({ i, key });
@@ -299,11 +325,9 @@
     const doc   = new DOMParser().parseFromString(html, 'text/html');
     const rows  = [];
 
-    const table = doc.querySelector('#incomings_table')
-                || doc.querySelector('#incomings_list')
-                || [...doc.querySelectorAll('table')].find(t =>
-                     t.textContent.includes('incoming') || t.textContent.includes('Incoming')
-                   );
+    // Only use the known specific table IDs — never fall through to nav tables.
+    // If #incomings_table doesn't exist or is empty, there are simply no incomings.
+    const table = doc.querySelector('#incomings_table, #incomings_list');
     if (!table) return rows;
 
     for (const row of table.querySelectorAll('tbody tr')) {
@@ -357,56 +381,60 @@
 
   // Parses outgoing commands (overview_villages&mode=commands).
   // Shows your attacks/supports currently in motion across all villages.
+  // Does NOT assume fixed cell positions — TW's column layout varies by server version.
   function parseOutgoing(html) {
     const doc  = new DOMParser().parseFromString(html, 'text/html');
     const rows = [];
 
-    // TW may use various table IDs for the commands overview
+    // Find the commands table by ID first, then by "has village links in data rows"
     const table = doc.querySelector('#commands_table, #commands_list, #outgoing_table')
-                || [...doc.querySelectorAll('table.vis, table')].find(t =>
+                || [...doc.querySelectorAll('table')].find(t =>
                      t.querySelector('tbody tr td a[href*="village="]')
                    );
     if (!table) return rows;
 
     for (const row of table.querySelectorAll('tbody tr')) {
-      const cells = [...row.querySelectorAll('td')];
-      if (cells.length < 3) continue;
+      // Collect every village link in the row — first = from, second = to
+      const vilLinks = [...row.querySelectorAll('a[href*="village="]')];
+      if (!vilLinks.length) continue;
 
-      const typeImg = cells[0]?.querySelector('img');
-      const typeAlt = (typeImg?.getAttribute('alt') || typeImg?.getAttribute('title') || '').toLowerCase();
-      const isNoble  = typeAlt.includes('snob') || typeAlt.includes('noble');
-      const isReturn = typeAlt.includes('return') || row.classList.contains('return');
-      const type     = typeImg?.getAttribute('title') || typeImg?.getAttribute('alt') || '?';
+      const fromLink = vilLinks[0];
+      const toLink   = vilLinks.length > 1 ? vilLinks[1] : null;
 
-      // From village (cell 1)
-      const fromLink = cells[1]?.querySelector('a[href*="village="]');
-      const fromVid  = fromLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
-      const fromRaw  = fromLink?.textContent?.trim() || '?';
-      const fromName = fromRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
+      const fromVid   = fromLink.getAttribute('href').match(/village=(\d+)/)?.[1];
+      const fromRaw   = fromLink.textContent.trim();
+      const fromName  = fromRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim() || fromVid || '?';
+      const fromCoord = fromRaw.match(/\((\d+)\|(\d+)\)/);
 
-      // To village (cell 2)
-      const toLink  = cells[2]?.querySelector('a[href*="village="]');
       const toVid   = toLink?.getAttribute('href')?.match(/village=(\d+)/)?.[1];
-      const toRaw   = toLink?.textContent?.trim() || cells[2]?.textContent?.trim() || '?';
-      const toName  = toRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim();
-      const toCoord = cells[2]?.textContent?.match(/\((\d+)\|(\d+)\)/);
+      const toRaw   = toLink?.textContent?.trim() || '';
+      const toName  = toRaw.replace(/\s*\(\d+\|\d+\).*$/, '').trim() || toVid || '?';
+      const toCoord = toRaw.match(/\((\d+)\|(\d+)\)/);
 
-      // Arrival/return time — prefer data-endtime countdown if present
-      const timeCell    = cells[3] || cells[cells.length - 1];
-      const countdownEl = timeCell?.querySelector('[data-endtime]');
+      // Type from the first image in the row
+      const typeImg = row.querySelector('td img');
+      const typeAlt = (typeImg?.getAttribute('alt') || typeImg?.getAttribute('title') || '').toLowerCase();
+      const type    = typeImg?.getAttribute('title') || typeImg?.getAttribute('alt') || '?';
+
+      // Arrival time: prefer data-endtime countdown element; otherwise find by time pattern in text
+      const countdownEl = row.querySelector('[data-endtime]');
       const arrives_ts  = countdownEl ? parseInt(countdownEl.getAttribute('data-endtime')) || null : null;
+      const cells       = [...row.querySelectorAll('td')];
+      const timeCell    = cells.find(c => /today at|tomorrow at|on \d{2}\.\d{2}\./.test(c.textContent))
+                       || (countdownEl?.closest('td'));
       const arrives     = timeCell?.textContent?.trim().replace(/\s+/g, ' ') || '?';
 
       rows.push({
         type,
-        is_noble:  isNoble,
-        is_return: isReturn,
+        is_noble:   typeAlt.includes('snob') || typeAlt.includes('noble'),
+        is_return:  typeAlt.includes('return') || row.classList.contains('return'),
         arrives_ts,
-        from_vid:  fromVid ? parseInt(fromVid) : null,
-        from_name: fromName,
-        to_vid:    toVid ? parseInt(toVid) : null,
-        to_name:   toName,
-        to_coord:  toCoord ? `${toCoord[1]}|${toCoord[2]}` : null,
+        from_vid:   fromVid   ? parseInt(fromVid)   : null,
+        from_name:  fromName,
+        from_coord: fromCoord ? `${fromCoord[1]}|${fromCoord[2]}` : null,
+        to_vid:     toVid     ? parseInt(toVid)     : null,
+        to_name:    toName,
+        to_coord:   toCoord   ? `${toCoord[1]}|${toCoord[2]}` : null,
         arrives,
       });
     }

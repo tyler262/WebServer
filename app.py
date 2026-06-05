@@ -1777,9 +1777,11 @@ def _generate_snapshot_md(data: dict) -> str:
         ]
         for cmd in outgoing:
             noble_flag = " ⚔Noble" if cmd.get("is_noble") else ""
+            to_coord   = cmd.get("to_coord") or ""
+            to_str     = cmd.get("to_name", "?") + (f" ({to_coord})" if to_coord else "")
             lines.append(
                 f"| {cmd.get('type','?')}{noble_flag} | {cmd.get('from_name','?')} "
-                f"| {cmd.get('to_name','?')} ({cmd.get('to_coord','?')}) | {cmd.get('arrives','?')} |"
+                f"| {to_str} | {cmd.get('arrives','?')} |"
             )
 
     # Own troops returning home
