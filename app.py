@@ -1655,16 +1655,17 @@ def tw_data():
 
 
 def _generate_snapshot_md(data: dict) -> str:
-    player  = data.get("player_name", "?")
-    world   = data.get("world", "?")
-    snapped = data.get("snapped_at", "")[:19].replace("T", " ")
-    cfg     = data.get("world_config", {})
-    units   = data.get("unit_info", {})
-    villages = data.get("villages", [])
+    player    = data.get("player_name", "?")
+    world     = data.get("world", "?")
+    snapped   = data.get("snapped_at", "")[:19].replace("T", " ")
+    cfg       = data.get("world_config", {})
+    units     = data.get("unit_info", {})
+    villages  = data.get("villages", [])
     incomings = data.get("incomings", [])
+    returning = data.get("returning", [])
 
-    ws = float(cfg.get("speed", 1))
-    us = float(cfg.get("unit_speed", 1))
+    ws    = float(cfg.get("speed", 1))
+    us    = float(cfg.get("unit_speed", 1))
     night = cfg.get("night", {})
     nc    = cfg.get("noble_coin_cost", {})
 
@@ -1677,7 +1678,7 @@ def _generate_snapshot_md(data: dict) -> str:
     ]
 
     if night.get("active"):
-        lines.append(f"- Night bonus: {night.get('night_start', '?')}:00 – {night.get('night_end', '?')}:00 (defense doubled)")
+        lines.append(f"- Night bonus: {night.get('start_hour', '?')}:00 – {night.get('end_hour', '?')}:00 (defense doubled)")
     else:
         lines.append("- Night bonus: off")
 
@@ -1708,7 +1709,6 @@ def _generate_snapshot_md(data: dict) -> str:
                 f"{s.get('carry','?')} | {s.get('pop','?')} |"
             )
 
-    # Villages
     BLDG_LABEL = {
         "main": "HQ", "barracks": "Barrack", "stable": "Stable",
         "garage": "Workshop", "watchtower": "Tower", "snob": "Academy",
@@ -1725,17 +1725,22 @@ def _generate_snapshot_md(data: dict) -> str:
 
     lines += ["", f"## My Villages ({len(villages)} total)"]
     for v in villages:
-        lines.append(f"\n### {v.get('name','?')} ({v.get('x','?')}|{v.get('y','?')})")
+        name = v.get("name", "?")
+        x, y = v.get("x", "?"), v.get("y", "?")
+        coord_str = f"({x}|{y})"
+        # Only append coords if not already embedded in the name
+        header = name if coord_str in name else f"{name} {coord_str}"
+        lines.append(f"\n### {header}")
 
         blds = v.get("buildings", {})
         if blds:
             parts = [f"{BLDG_LABEL.get(k, k)} {n}" for k, n in sorted(blds.items()) if n]
             lines.append("- **Buildings:** " + "  ·  ".join(parts))
 
-        res = v.get("research", {})
-        if res:
-            parts = [f"{UNIT_LABEL.get(k, k)} {n}" for k, n in sorted(res.items()) if n]
-            lines.append("- **Research:** " + "  ·  ".join(parts))
+        tq = v.get("training_queue", {})
+        if tq:
+            parts = [f"{UNIT_LABEL.get(k, k)} {n}" for k, n in sorted(tq.items()) if n]
+            lines.append("- **Training:** " + "  ·  ".join(parts))
 
         troops = v.get("troops", {})
         if troops:
@@ -1744,7 +1749,7 @@ def _generate_snapshot_md(data: dict) -> str:
         elif blds:
             lines.append("- **At home:** none (or away)")
 
-    # Incomings
+    # Enemy incoming attacks
     lines += ["", f"## Incoming Attacks ({len(incomings)})"]
     if incomings:
         lines += [
@@ -1758,6 +1763,78 @@ def _generate_snapshot_md(data: dict) -> str:
             )
     else:
         lines.append("_No incoming attacks at time of snapshot._")
+
+    # Own troops returning home
+    if returning:
+        lines += ["", f"## Returning Movements ({len(returning)})"]
+        lines += [
+            "| From (coord) | → Target | Arrives |",
+            "|-------------|---------|---------|",
+        ]
+        for ret in returning:
+            lines.append(
+                f"| {ret.get('from_coord','?')} "
+                f"| {ret.get('to_name','?')} | {ret.get('arrives','?')} |"
+            )
+
+    lines += ["", "---", ""]
+    return "\n".join(lines)
+
+
+def _generate_world_md(data: dict) -> str:
+    """Auto-generated world config + unit stats reference. Gitignored, persistent Notes section."""
+    player  = data.get("player_name", "?")
+    world   = data.get("world", "?")
+    snapped = data.get("snapped_at", "")[:19].replace("T", " ")
+    cfg     = data.get("world_config", {})
+    units   = data.get("unit_info", {})
+
+    ws    = float(cfg.get("speed", 1))
+    us    = float(cfg.get("unit_speed", 1))
+    night = cfg.get("night", {})
+    nc    = cfg.get("noble_coin_cost", {})
+
+    lines = [
+        f"# World Config — {world}",
+        f"_Auto-generated from snapshot. Last updated: {snapped} UTC by {player}_",
+        "_Do not edit the sections above the Notes divider — they are overwritten on each snapshot._",
+        "",
+        "## World Settings",
+        f"- Speed: **{ws}x**  ·  Unit speed: **{us}x**  ·  Effective movement: **{ws * us}x**",
+    ]
+
+    if night.get("active"):
+        lines.append(f"- Night bonus: {night.get('start_hour', '?')}:00 – {night.get('end_hour', '?')}:00 (defense doubled)")
+    else:
+        lines.append("- Night bonus: off")
+
+    lines.append(f"- Morale: {'on' if cfg.get('morale') else 'off'}")
+    lines.append(f"- Map size: {cfg.get('map_size', 1000)}×{cfg.get('map_size', 1000)}")
+    if nc and any(nc.values()):
+        lines.append(f"- Noble coin cost: {nc.get('wood',0):,} wood / {nc.get('stone',0):,} stone / {nc.get('iron',0):,} iron")
+        lines.append(f"- Max noble distance: {cfg.get('noble_max_distance', '?')} tiles")
+
+    if units:
+        lines += [
+            "",
+            "## Unit Stats",
+            f"Travel formula: `minutes = distance × base_min_per_tile / (world_speed × unit_speed)`",
+            f"World modifier: {ws} × {us} = **{ws * us}x** (divide base_min_per_tile by this)",
+            "",
+            "| Unit | Attack | Def/inf | Def/cav | Base min/tile | Actual min/tile | Carry | Pop |",
+            "|------|--------|---------|---------|---------------|-----------------|-------|-----|",
+        ]
+        for name, s in units.items():
+            base_speed = s.get("speed", "?")
+            try:
+                actual = round(float(base_speed) / (ws * us), 2)
+            except (TypeError, ValueError):
+                actual = "?"
+            lines.append(
+                f"| {name} | {s.get('attack','?')} | {s.get('defense','?')} | "
+                f"{s.get('defense_cavalry','?')} | {base_speed} | {actual} | "
+                f"{s.get('carry','?')} | {s.get('pop','?')} |"
+            )
 
     lines += ["", "---", ""]
     return "\n".join(lines)
@@ -1776,28 +1853,38 @@ def tw_snapshot_post():
     with open(TW_SNAPSHOT_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-    snap_path = os.path.join(TW_DIR, "SNAPSHOT.md")
-    md = _generate_snapshot_md(data)
+    snap_path  = os.path.join(TW_DIR, "SNAPSHOT.md")
+    world_path = os.path.join(TW_DIR, "WORLD.md")
 
-    # Preserve any Notes section the user added manually
-    if os.path.exists(snap_path):
-        with open(snap_path) as f:
-            existing = f.read()
-        if "## Notes" in existing:
-            notes_block = existing[existing.index("## Notes"):]
-            md = md.rstrip() + "\n\n" + notes_block.strip() + "\n"
+    def _write_with_notes(path, generate_fn, default_note):
+        md = generate_fn(data)
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                existing = f.read()
+            if "## Notes" in existing:
+                notes_block = existing[existing.index("## Notes"):]
+                md = md.rstrip() + "\n\n" + notes_block.strip() + "\n"
+            else:
+                md += default_note
         else:
-            md += "## Notes\n\n_Add strategy notes, war targets, and diplomacy here._\n_This section survives re-runs._\n"
-    else:
-        md += "## Notes\n\n_Add strategy notes, war targets, and diplomacy here._\n_This section survives re-runs._\n"
+            md += default_note
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(md)
 
-    with open(snap_path, "w") as f:
-        f.write(md)
+    _write_with_notes(
+        snap_path, _generate_snapshot_md,
+        "## Notes\n\n_Add strategy notes, war targets, and diplomacy here._\n_This section survives re-runs._\n",
+    )
+    _write_with_notes(
+        world_path, _generate_world_md,
+        "## Notes\n\n_Add world-specific notes (diplomacy rules, rally point configs, etc.) here._\n_This section survives re-runs._\n",
+    )
 
     return _tw_cors(jsonify({
-        "ok": True,
-        "villages": len(data.get("villages", [])),
+        "ok":        True,
+        "villages":  len(data.get("villages", [])),
         "incomings": len(data.get("incomings", [])),
+        "returning": len(data.get("returning", [])),
     }))
 
 

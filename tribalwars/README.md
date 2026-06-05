@@ -69,12 +69,14 @@ Fetches everything needed to reason about your game state:
 | Unit stats — attack, defense, speed, carry, pop — **for this world** | `interface.php` (public) |
 | Building levels for every village (barracks, stable, workshop, farm, …) | Authenticated |
 | Troops at home in every village | Authenticated |
-| Unit research levels in every village | Authenticated |
+| Training queues for every village (units currently being trained) | Authenticated |
 | Incoming attacks (time, from, target) | Authenticated |
+| Returning own troops (separated from enemy incomings) | Authenticated |
 | ODA + ODD kill rankings (offensive + defensive points per player) | Public map files |
 
 After running:
 - `tribalwars/SNAPSHOT.md` — human/AI-readable summary (gitignored)
+- `tribalwars/WORLD.md` — persistent world config + unit stats (gitignored)
 - `tribalwars/snapshot.json` — raw JSON (gitignored)
 - `GET http://192.168.1.4:8888/api/tw/snapshot` — API endpoint
 
