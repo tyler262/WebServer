@@ -394,6 +394,25 @@ header {
 .tv-status-msg.error   { color: var(--danger); }
 
 /* ── Pi-hole ─────────────────────────────── */
+.pihole-multi {
+  display: flex;
+  gap: 1rem;
+}
+
+.pihole-instance {
+  flex: 1;
+  min-width: 0;
+}
+
+.pihole-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+
 .pihole-status {
   display: flex;
   align-items: center;

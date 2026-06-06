@@ -286,7 +286,7 @@ def notify(title: str, message: str, tags: list = None):
 
 # ── Pi-hole v6 auth ────────────────────────────────────────────────────────────
 
-_pihole_v6_sid: dict = {"value": None, "expires": 0.0}
+_pihole_v6_sessions: dict = {}  # host -> {sid, expires}
 
 
 def _pihole_v6_auth(host: str, password: str) -> str:
@@ -298,22 +298,68 @@ def _pihole_v6_auth(host: str, password: str) -> str:
     r.raise_for_status()
     sess = r.json().get("session", {})
     if not sess.get("valid"):
-        raise Exception("Authentication failed — check pihole.password in config.json")
-    _pihole_v6_sid["value"] = sess["sid"]
-    _pihole_v6_sid["expires"] = time.time() + sess.get("validity", 1800) - 60
+        raise Exception("Authentication failed — check piholes[].password in config.json")
+    _pihole_v6_sessions[host] = {
+        "sid": sess["sid"],
+        "expires": time.time() + sess.get("validity", 1800) - 60,
+    }
     return sess["sid"]
 
 
 def _pihole_v6_get(host: str, password: str, path: str) -> dict:
-    if not _pihole_v6_sid["value"] or time.time() >= _pihole_v6_sid["expires"]:
+    s = _pihole_v6_sessions.get(host, {})
+    if not s.get("sid") or time.time() >= s.get("expires", 0):
         _pihole_v6_auth(host, password)
     r = requests.get(
         f"http://{host}/api/{path}",
-        headers={"sid": _pihole_v6_sid["value"]},
+        headers={"sid": _pihole_v6_sessions[host]["sid"]},
         timeout=5,
     )
     r.raise_for_status()
     return r.json()
+
+
+def _fetch_pihole_stats(ph: dict) -> dict:
+    """Fetch stats from one Pi-hole config entry. Returns a dict always including 'name'."""
+    host     = ph.get("host", "localhost")
+    name     = ph.get("name", host)
+    password = ph.get("password", "").strip()
+    api_key  = ph.get("api_key", "").strip()
+
+    if password:
+        try:
+            summary  = _pihole_v6_get(host, password, "stats/summary")
+            blocking = _pihole_v6_get(host, password, "dns/blocking")
+            q = summary.get("queries", {})
+            g = summary.get("gravity", {})
+            return {
+                "name": name,
+                "queries_today":   q.get("total", 0),
+                "blocked_today":   q.get("blocked", 0),
+                "percent_blocked": round(float(q.get("percent_blocked", 0)), 1),
+                "domains_blocked": g.get("domains_being_blocked", 0),
+                "status": blocking.get("blocking", "unknown"),
+            }
+        except Exception as e:
+            return {"name": name, "error": f"Pi-hole v6: {e}"}
+
+    try:
+        url = f"http://{host}/admin/api.php?summary"
+        if api_key:
+            url += f"&auth={api_key}"
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
+        d = r.json()
+        return {
+            "name": name,
+            "queries_today":   d.get("dns_queries_today", 0),
+            "blocked_today":   d.get("ads_blocked_today", 0),
+            "percent_blocked": round(float(d.get("ads_percentage_today", 0)), 1),
+            "domains_blocked": d.get("domains_being_blocked", 0),
+            "status": d.get("status", "unknown"),
+        }
+    except Exception as e:
+        return {"name": name, "error": str(e)}
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -885,45 +931,13 @@ def devices():
 @app.route("/api/pihole")
 def pihole():
     config = load_config()
-    ph = config.get("pihole", {})
-    host = ph.get("host", "localhost")
-    password = ph.get("password", "").strip()
-    api_key = ph.get("api_key", "").strip()
-
-    # Pi-hole v6: uses password auth + REST API
-    if password:
-        try:
-            summary = _pihole_v6_get(host, password, "stats/summary")
-            blocking = _pihole_v6_get(host, password, "dns/blocking")
-            q = summary.get("queries", {})
-            g = summary.get("gravity", {})
-            return jsonify({
-                "queries_today": q.get("total", 0),
-                "blocked_today": q.get("blocked", 0),
-                "percent_blocked": round(float(q.get("percent_blocked", 0)), 1),
-                "domains_blocked": g.get("domains_being_blocked", 0),
-                "status": blocking.get("blocking", "unknown"),
-            })
-        except Exception as e:
-            return jsonify({"error": f"Pi-hole v6: {e}"}), 500
-
-    # Pi-hole v5 fallback: /admin/api.php
-    try:
-        url = f"http://{host}/admin/api.php?summary"
-        if api_key:
-            url += f"&auth={api_key}"
-        r = requests.get(url, timeout=5)
-        r.raise_for_status()
-        d = r.json()
-        return jsonify({
-            "queries_today": d.get("dns_queries_today", 0),
-            "blocked_today": d.get("ads_blocked_today", 0),
-            "percent_blocked": round(float(d.get("ads_percentage_today", 0)), 1),
-            "domains_blocked": d.get("domains_being_blocked", 0),
-            "status": d.get("status", "unknown"),
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # Support both new "piholes" array and old single "pihole" object
+    piholes = config.get("piholes")
+    if not piholes:
+        old = config.get("pihole", {})
+        piholes = [{**old, "name": old.get("name", "Pi-hole")}] if old else []
+    results = [_fetch_pihole_stats(ph) for ph in piholes]
+    return jsonify(results)
 
 
 @app.route("/api/system")

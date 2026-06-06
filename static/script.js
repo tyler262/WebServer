@@ -178,17 +178,15 @@ async function fetchNews() {
 }
 
 // ── Pi-hole ───────────────────────────────────────────────────────────────────
-async function fetchPihole() {
-  const el = document.getElementById("pihole-content");
-  if (!el) return;
-  try {
-    const d = await (await fetch("/api/pihole")).json();
-    if (d.error) { el.innerHTML = `<p class="error">${d.error}</p>`; return; }
-    const isEnabled = d.status === "enabled";
-    el.innerHTML = `
+function _renderPihole(d, showName) {
+  if (d.error) return `<div class="pihole-instance">${showName ? `<div class="pihole-name">${escapeHtml(d.name)}</div>` : ''}<p class="error">${escapeHtml(d.error)}</p></div>`;
+  const isEnabled = d.status === "enabled";
+  return `
+    <div class="pihole-instance">
+      ${showName ? `<div class="pihole-name">${escapeHtml(d.name)}</div>` : ''}
       <div class="pihole-status">
         <span class="dot ${isEnabled ? "online" : "offline"}"></span>
-        Pi-hole is <strong style="color:var(--${isEnabled ? "success" : "danger"})">${d.status}</strong>
+        <strong style="color:var(--${isEnabled ? "success" : "danger"})">${escapeHtml(d.status)}</strong>
       </div>
       <div class="stats-grid">
         <div class="stat-box">
@@ -207,7 +205,18 @@ async function fetchPihole() {
           <div class="stat-value">${Number(d.domains_blocked).toLocaleString()}</div>
           <div class="stat-label">Blocklist</div>
         </div>
-      </div>`;
+      </div>
+    </div>`;
+}
+
+async function fetchPihole() {
+  const el = document.getElementById("pihole-content");
+  if (!el) return;
+  try {
+    const raw = await (await fetch("/api/pihole")).json();
+    const list = Array.isArray(raw) ? raw : [raw];
+    const showName = list.length > 1;
+    el.innerHTML = `<div class="pihole-multi">${list.map(d => _renderPihole(d, showName)).join('')}</div>`;
   } catch {
     el.innerHTML = '<p class="error">Failed to load Pi-hole stats</p>';
   }

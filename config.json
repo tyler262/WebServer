@@ -37,11 +37,20 @@
       "ip": "192.168.1.101"
     }
   ],
-  "pihole": {
-    "host": "localhost",
-    "password": "",
-    "api_key": ""
-  },
+  "piholes": [
+    {
+      "name": "Pi-hole 1",
+      "host": "192.168.1.2",
+      "password": "",
+      "api_key": ""
+    },
+    {
+      "name": "Pi-hole 2",
+      "host": "192.168.1.3",
+      "password": "",
+      "api_key": ""
+    }
+  ],
   "ntfy": {
     "topic": "",
     "server": "https://ntfy.sh"
