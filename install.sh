@@ -47,6 +47,9 @@ PKGS=()
 command -v pip3   &>/dev/null || PKGS+=(python3-pip)
 command -v nginx  &>/dev/null || PKGS+=(nginx)
 command -v adb    &>/dev/null || PKGS+=(android-tools-adb)
+# OpenCV (cv2) for the Live Camera card + v4l-utils for USB camera detection.
+python3 -c 'import cv2' &>/dev/null || PKGS+=(python3-opencv)
+command -v v4l2-ctl &>/dev/null || PKGS+=(v4l-utils)
 
 if [[ ${#PKGS[@]} -gt 0 ]]; then
     echo "    Installing: ${PKGS[*]}"
@@ -56,6 +59,16 @@ fi
 ok "python3-pip"
 ok "nginx"
 ok "adb (Android Debug Bridge)"
+ok "python3-opencv (Live Camera)"
+ok "v4l-utils"
+
+# Service user needs the 'video' group to read /dev/video* (the USB camera).
+if id -nG "$CURRENT_USER" | grep -qw video; then
+    ok "$CURRENT_USER already in 'video' group"
+else
+    sudo usermod -aG video "$CURRENT_USER"
+    ok "Added $CURRENT_USER to 'video' group (camera access)"
+fi
 
 # ── Python packages ───────────────────────────────────────────────────────────
 step "Installing Python packages"
@@ -160,6 +173,22 @@ if [[ "$DNS_OK" == false ]]; then
     warn "Couldn't find Pi-hole's custom.list — add the DNS record manually:"
     warn "  Pi-hole admin → Local DNS → DNS Records"
     warn "  Hostname: $DASHBOARD_HOSTNAME   →   IP: $PI_IP"
+fi
+
+# ── USB camera detection ──────────────────────────────────────────────────────
+step "Detecting USB camera"
+
+if ls /dev/video* &>/dev/null; then
+    if command -v v4l2-ctl &>/dev/null; then
+        v4l2-ctl --list-devices 2>/dev/null | sed 's/^/    /' || true
+    fi
+    ok "Camera device(s) found: $(ls /dev/video* | tr '\n' ' ')"
+    warn "If the stream is blank, set camera.device in config.json to the right"
+    warn "  index (the number in /dev/videoN — usually 0)."
+else
+    warn "No /dev/video* device found — is the USB camera plugged in?"
+    warn "  The Live Camera card will show a friendly message until one appears."
+    warn "  You can disable it by setting camera.enabled to false in config.json."
 fi
 
 # ── config.json check ─────────────────────────────────────────────────────────

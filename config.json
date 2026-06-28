@@ -45,6 +45,14 @@
     "source": "picsum",
     "nasa_api_key": ""
   },
+  "camera": {
+    "enabled": true,
+    "name": "USB Camera",
+    "device": 0,
+    "width": 1280,
+    "height": 720,
+    "fps": 15
+  },
   "news": {
     "feeds": [
       {

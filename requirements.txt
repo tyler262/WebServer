@@ -2,3 +2,9 @@ flask>=2.3.0
 requests>=2.31.0
 feedparser>=6.0.10
 psutil>=5.9.0
+
+# OpenCV powers the Live Camera card. On a Raspberry Pi install it from apt
+# instead of pip — it's a prebuilt package and avoids a long compile:
+#   sudo apt install python3-opencv
+# install.sh does this for you. If you're on a non-Debian system, you can
+# instead run:  pip3 install opencv-python-headless

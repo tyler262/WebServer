@@ -118,6 +118,23 @@ To switch to NASA APOD, see the **Optional: NASA Photo** section below.
 
 ---
 
+### 📷 Live Camera
+A live MJPEG video feed from a USB webcam plugged into the Pi, shown full-width
+at the top of the dashboard. The feed is captured with OpenCV and streamed to
+every device on your network — open the dashboard on a phone to use it as a
+quick baby monitor, doorway cam, workshop view, etc.
+
+To keep the camera from running 24/7, the Pi only opens the device while
+someone is actually watching and releases it a few seconds after the last
+viewer closes the page. If no camera is plugged in (or the camera support
+isn't installed yet), the card shows a friendly message instead of an error and
+the rest of the dashboard keeps working normally.
+
+Configure it under `camera` in `config.json` (device index, resolution, frame
+rate). Set `enabled` to `false` to hide the card entirely.
+
+---
+
 ### ✅ To-Do List
 A shared household task list. Anyone on the network can add, check off, or
 delete tasks through the dashboard. Data is stored in a local SQLite database
@@ -270,6 +287,32 @@ smart home hubs, NAS drives, game consoles.
 |-------|-------------|
 | `source` | `"picsum"` for random daily photos (no key needed). `"nasa_apod"` for NASA's Astronomy Picture of the Day. |
 | `nasa_api_key` | Only needed if `source` is `"nasa_apod"`. Get a free key at [api.nasa.gov](https://api.nasa.gov/). |
+
+---
+
+### Camera
+```json
+"camera": {
+  "enabled": true,
+  "name": "USB Camera",
+  "device": 0,
+  "width": 1280,
+  "height": 720,
+  "fps": 15
+}
+```
+| Field | Description |
+|-------|-------------|
+| `enabled` | `true` to show the Live Camera card. Set to `false` to hide it. |
+| `name` | Label shown under the video feed. |
+| `device` | Camera index — the number in `/dev/videoN` (usually `0`). If you have more than one camera, try `1`, `2`, etc. |
+| `width` / `height` | Capture resolution. Lower it (e.g. `640` × `480`) if the stream is laggy on a Pi Zero / older model. |
+| `fps` | Target frames per second. `10`–`15` is plenty for a dashboard and keeps CPU usage low. |
+
+Camera support uses OpenCV, which the installer adds via `sudo apt install
+python3-opencv`. If you didn't run `install.sh`, install it manually and make
+sure the dashboard's user is in the `video` group (`sudo usermod -aG video
+$USER`, then reboot).
 
 ---
 
@@ -427,6 +470,7 @@ show an error, which is normal.
 ```
 WebServer/
 ├── app.py              # Flask server — all API routes and logic
+├── camera.py           # USB webcam capture + MJPEG streaming
 ├── config.json         # Your settings — edit this
 ├── install.sh          # One-command installer
 ├── requirements.txt    # Python package list
@@ -474,3 +518,15 @@ personal data — todos and suggestions. It lives only on the Pi.
 **Service won't start after a reboot**
 - Check the logs: `sudo journalctl -u pi-dashboard -n 30`
 - Most common cause: wrong path in the service file. Re-run `bash install.sh`
+
+**Live Camera card shows "Camera support isn't installed"**
+- Install OpenCV: `sudo apt install python3-opencv`, then restart the service
+
+**Live Camera card is blank or shows "Could not open camera"**
+- Confirm the camera is detected: `ls /dev/video*` (you should see `/dev/video0`)
+- List cameras and capabilities: `v4l2-ctl --list-devices`
+- Make sure the dashboard user can read the device: `sudo usermod -aG video $USER`
+  then reboot (group membership only applies to new logins)
+- If you have multiple `/dev/videoN` devices, set the right `camera.device`
+  index in `config.json` and restart the service
+- Some webcams only support certain resolutions — try `640` × `480` in config

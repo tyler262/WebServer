@@ -209,6 +209,30 @@ async function fetchPhoto() {
   }
 }
 
+// ── Live Camera ───────────────────────────────────────────────────────────────
+async function fetchCamera() {
+  const el = document.getElementById("camera-content");
+  try {
+    const d = await (await fetch("/api/camera/status")).json();
+    if (!d.available) {
+      const msgs = {
+        disabled: 'Camera is turned off. Set "camera.enabled" to true in config.json.',
+        opencv_missing: "Camera support isn't installed yet. Run install.sh, or: sudo apt install python3-opencv",
+      };
+      el.innerHTML = `<p class="muted">${msgs[d.reason] || "Camera not available"}</p>`;
+      return;
+    }
+    if (d.error) { el.innerHTML = `<p class="error">${escapeHtml(d.error)}</p>`; return; }
+    // Cache-bust so reconnecting starts a fresh stream rather than a stale one.
+    el.innerHTML = `
+      <img class="camera-img" src="/video_feed?t=${Date.now()}" alt="${escapeHtml(d.name)}"
+           onerror="this.parentElement.innerHTML='<p class=&quot;error&quot;>Camera stream stopped</p>'">
+      <div class="camera-name">${escapeHtml(d.name)}</div>`;
+  } catch {
+    el.innerHTML = '<p class="error">Failed to load camera</p>';
+  }
+}
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function escapeHtml(str) {
   return String(str)
@@ -338,6 +362,7 @@ async function turnOffTV(index, btn) {
 
 // ── Init & refresh ────────────────────────────────────────────────────────────
 function loadAll() {
+  fetchCamera();
   fetchWeather();
   fetchNews();
   fetchDevices();

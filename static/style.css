@@ -50,6 +50,7 @@ header {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-areas:
+    "camera   camera"
     "weather  tv"
     "pihole   system"
     "quote    joke"
@@ -67,6 +68,7 @@ header {
   .grid {
     grid-template-columns: 1fr;
     grid-template-areas:
+      "camera"
       "weather"
       "tv"
       "pihole"
@@ -81,6 +83,7 @@ header {
   }
 }
 
+.camera-card   { grid-area: camera; }
 #weather-card  { grid-area: weather; }
 #tv-card       { grid-area: tv; }
 #pihole-card   { grid-area: pihole; }
@@ -425,6 +428,22 @@ header {
   color: var(--muted);
   margin-top: 0.35rem;
   line-height: 1.5;
+}
+
+/* ── Live Camera ─────────────────────────── */
+.camera-img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.camera-name {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
 }
 
 /* ── Text inputs & submit button ─────────── */

@@ -1,14 +1,17 @@
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 import json
 import os
 import socket
 import sqlite3
 import subprocess
+import threading
 import time
 
 import feedparser
 import psutil
 import requests
+
+import camera
 
 app = Flask(__name__)
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
@@ -84,6 +87,31 @@ def wmo_icon(code):
 def load_config():
     with open(CONFIG_FILE) as f:
         return json.load(f)
+
+
+_camera_stream = None
+_camera_lock = threading.Lock()
+
+
+def get_camera():
+    """Return the shared CameraStream, or None if the camera is unavailable.
+
+    Returns None when the camera is disabled in config.json or OpenCV isn't
+    installed, so callers can degrade gracefully instead of raising.
+    """
+    cfg = load_config().get("camera", {})
+    if not cfg.get("enabled", False) or not camera.OPENCV_AVAILABLE:
+        return None
+    global _camera_stream
+    with _camera_lock:
+        if _camera_stream is None:
+            _camera_stream = camera.CameraStream(
+                device=cfg.get("device", 0),
+                width=cfg.get("width", 1280),
+                height=cfg.get("height", 720),
+                fps=cfg.get("fps", 15),
+            )
+        return _camera_stream
 
 
 _cache: dict = {}
@@ -376,6 +404,45 @@ def photo():
         }
         set_cache("photo", result)
         return jsonify(result)
+
+
+@app.route("/api/camera/status")
+def camera_status():
+    cfg = load_config().get("camera", {})
+    if not cfg.get("enabled", False):
+        return jsonify({"available": False, "reason": "disabled"})
+    if not camera.OPENCV_AVAILABLE:
+        return jsonify({"available": False, "reason": "opencv_missing"})
+    cam = get_camera()
+    return jsonify(
+        {
+            "available": True,
+            "name": cfg.get("name", "USB Camera"),
+            "error": cam.error if cam else None,
+        }
+    )
+
+
+@app.route("/video_feed")
+def video_feed():
+    cam = get_camera()
+    if cam is None:
+        return jsonify({"error": "Camera not available"}), 503
+    return Response(
+        cam.frames(),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+@app.route("/api/camera/snapshot")
+def camera_snapshot():
+    cam = get_camera()
+    if cam is None:
+        return jsonify({"error": "Camera not available"}), 503
+    frame = cam.snapshot()
+    if frame is None:
+        return jsonify({"error": cam.error or "No frame available"}), 503
+    return Response(frame, mimetype="image/jpeg")
 
 
 @app.route("/api/todos", methods=["GET"])
